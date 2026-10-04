@@ -403,6 +403,171 @@ window.PF_DATA = (function () {
     },
   ];
 
+
+  // Extracurricular taster trials. Steps with w:true ask for a short written answer; others are "I did this" checks.
+  // `reveal` text appears after a step is done. Ratings: 4 loved, 3 liked, 2 not sure, 1 not for me.
+  const ACTIVITIES = [
+    { id: 'robotics', name: 'Robotics Club', emoji: '🤖', minutes: 20, careers: ['mech-engineer', 'software-engineer', 'architect'],
+      blurb: 'Teams design, build, and program robots for challenges (FIRST LEGO League, VEX, FIRST Robotics).',
+      commit: 'About 2–4 hours a week, more before competitions.',
+      join: 'Ask a science or tech teacher or your counselor about a robotics team. Many libraries and community centers have teams too.',
+      steps: [
+        { t: 'Sketch a robot that could pick up a cup and put it on a shelf. Label at least 3 parts (like wheels, arm, sensor) and say what each one does.', w: true },
+        { t: 'Write the steps your robot follows to do the job, in plain words. Be exact: robots only do what you tell them!', w: true, reveal: 'Real robot teams do this too: break a job into tiny steps, test, and fix. "Move forward" is not enough. How far? How fast?' },
+        { t: 'Find one simple machine at home (lever, wheel, ramp, pulley) and notice how it makes work easier.' },
+      ] },
+    { id: 'coding-club', name: 'Coding Club / Hackathon', emoji: '💻', minutes: 20, careers: ['software-engineer', 'data-scientist'],
+      blurb: 'Build games, apps, and websites with friends and learn to solve problems like a programmer.',
+      commit: 'About 1–2 hours a week; hackathons are usually one weekend.',
+      join: 'Ask your computer science teacher about a club. Look for the Congressional App Challenge and local or online hackathons for students.',
+      steps: [
+        { t: 'Write instructions for making a peanut butter and jelly sandwich so exact that a robot could follow them. Use at least 6 steps.', w: true },
+        { t: 'Now debug it! Imagine the robot follows your steps literally. What is the most likely thing to go wrong, and how do you fix that step?', w: true, reveal: 'Finding and fixing mistakes (debugging) is most of what programmers do. Being wrong and fixing it is the job, not a failure.' },
+        { t: 'Describe an app or game that would help people at your school. Who would use it and what would it do?', w: true },
+      ] },
+    { id: 'math-team', name: 'Math Team / Olympiad', emoji: '➗', minutes: 20, careers: ['data-scientist', 'financial-analyst', 'software-engineer', 'mech-engineer'],
+      blurb: 'Solve puzzle-style problems alone and in teams (MATHCOUNTS, AMC 8/10/12, math leagues).',
+      commit: 'About 1–2 hours a week of practice, plus a few contests a year.',
+      join: 'Ask your math teacher about MATHCOUNTS or a math club. The AMC contests are usually given at school.',
+      steps: [
+        { t: 'Puzzle 1: 8 people are at a party and every person shakes hands once with every other person. How many handshakes happen? Try drawing it before you calculate.', w: true, reveal: 'Answer: 28. Each of 8 people shakes 7 hands, which counts every handshake twice: 8 × 7 ÷ 2 = 28.' },
+        { t: 'Puzzle 2: What is the sum of all the whole numbers from 1 to 20? Hint: pair 1 with 20, 2 with 19, and so on.', w: true, reveal: 'Answer: 210. That makes 10 pairs that each add up to 21. Math contests reward clever shortcuts like this!' },
+        { t: 'Notice how it felt. Did working out a hard problem feel fun, frustrating, or both? That feeling is what math contests are like.' },
+      ] },
+    { id: 'science-olympiad', name: 'Science Olympiad / Science Fair', emoji: '🔬', minutes: 25, careers: ['physician', 'env-scientist', 'mech-engineer', 'nurse', 'psychologist'],
+      blurb: 'Compete in science events or run your own experiment (Science Olympiad, regional and national science fairs).',
+      commit: 'Around 2–3 hours a week during the season.',
+      join: 'Ask a science teacher about Science Olympiad. For science fairs, start by asking your teacher about your school fair.',
+      steps: [
+        { t: 'Question: Does a paper airplane fly farther with bigger wings? Write your prediction (hypothesis) and why you think so.', w: true },
+        { t: 'Design the test. What will you change, what will you keep the same, and what will you measure? (Try it if you have paper!)', w: true, reveal: 'You just described variables: the thing you change, the things you keep the same, and the thing you measure. That is the heart of every science fair project.' },
+        { t: 'Name one thing that could make your results unfair or wrong. How would you fix it?', w: true },
+      ] },
+    { id: 'debate', name: 'Debate / Speech', emoji: '🎤', minutes: 20, careers: ['lawyer', 'journalist', 'teacher', 'entrepreneur'],
+      blurb: 'Research a topic, build arguments, and speak with confidence (speech and debate leagues).',
+      commit: 'About 2–3 hours a week plus weekend tournaments.',
+      join: 'Ask your English or social studies teacher or counselor about a debate or speech team.',
+      steps: [
+        { t: 'Topic: "Schools should start later in the morning." Write two strong arguments FOR.', w: true },
+        { t: 'Now switch sides. Write two strong arguments AGAINST, as if you really believed them.', w: true, reveal: 'Debaters often have to argue the side they disagree with. It teaches you to understand other people\'s views, which is a skill for any job.' },
+        { t: 'Say a 60-second speech out loud (to a mirror, a pet, or a person) with your best argument.' },
+      ] },
+    { id: 'mock-trial', name: 'Mock Trial / Model UN', emoji: '⚖️', minutes: 20, careers: ['lawyer', 'journalist'],
+      blurb: 'Act as lawyers, witnesses, or countries in a pretend courtroom or United Nations meeting.',
+      commit: 'About 2–3 hours a week during the season.',
+      join: 'Ask your social studies teacher or counselor. Mock Trial and Model UN are common in grades 8–12.',
+      steps: [
+        { t: 'Case: someone ate the last cupcake from the class party. Two students are accused. Write 3 questions you would ask a witness to find out the truth.', w: true },
+        { t: 'Look at your questions: which ones can be answered with just "yes" or "no"? Rewrite one to get a fuller answer.', w: true, reveal: 'Good lawyers ask careful questions. "What did you see?" gets more than "Did you see anything?".' },
+        { t: 'In 2 sentences, give your closing statement: who do you think did it, and what is your best evidence?', w: true },
+      ] },
+    { id: 'journalism', name: 'School Newspaper / Yearbook', emoji: '📰', minutes: 20, careers: ['journalist', 'graphic-designer', 'teacher', 'lawyer'],
+      blurb: 'Report on school stories, write articles, take photos, and lay out pages.',
+      commit: 'About 2–4 hours a week, with deadlines.',
+      join: 'Ask your English teacher or the yearbook or newspaper advisor.',
+      steps: [
+        { t: 'Pick something happening at school or home. Write a headline and a 3-sentence opening that answers who, what, when, and where.', w: true },
+        { t: 'Write 3 interview questions you would ask someone about it. Make them open-ended (not yes/no).', w: true, reveal: 'Reporters ask "how" and "why" so people tell the story. Great interviews start with great questions.' },
+        { t: 'How would you check that every fact in your story is true? Name one way.', w: true },
+      ] },
+    { id: 'art-design', name: 'Art / Design Club', emoji: '🎨', minutes: 20, careers: ['graphic-designer', 'architect'],
+      blurb: 'Make posters, logos, digital art, and designs for school events.',
+      commit: 'About 1–3 hours a week.',
+      join: 'Ask your art teacher. School events often need poster and logo designers!',
+      steps: [
+        { t: 'Sketch a new logo for your school or a club. Use just 2–3 colors.' },
+        { t: 'Explain your choices: why those colors and that shape? What feeling should people get when they see it?', w: true, reveal: 'Designers explain the "why" behind choices. Colors and shapes send messages: blue feels calm and trustworthy, red feels bold and urgent.' },
+        { t: 'Show it to someone and ask: "What do you think this logo is for?" Write down what they said.', w: true },
+      ] },
+    { id: 'maker-architecture', name: 'Makerspace / Architecture Club', emoji: '🏗️', minutes: 25, careers: ['architect', 'mech-engineer'],
+      blurb: 'Design and build models, structures, and inventions with your hands.',
+      commit: 'About 2 hours a week.',
+      join: 'Ask your tech/engineering teacher, librarian, or look for a community makerspace.',
+      steps: [
+        { t: 'Draw a floor plan for a tiny house on paper with at least 3 rooms. Mark where the doors and windows go.' },
+        { t: 'Imagine walking through it. Describe one problem you notice (a door that bumps, no light, too cramped) and how you would fix it.', w: true, reveal: 'Architects "walk through" their designs in their heads before building. Finding problems early is cheaper than finding them after the building is built.' },
+        { t: 'Build a tower from paper or cards that can hold a small book. What shape made it strong?', w: true },
+      ] },
+    { id: 'peer-tutoring', name: 'Peer Tutoring / Teaching', emoji: '🍎', minutes: 15, careers: ['teacher', 'psychologist', 'nurse'],
+      blurb: 'Help other students learn, or lead a mini-lesson for younger kids.',
+      commit: 'About 1 hour a week.',
+      join: 'Ask a teacher or counselor about a peer tutoring program, or offer to help at a library or elementary school.',
+      steps: [
+        { t: 'Choose something you know well (a game, a math trick, a recipe). Teach it to someone in under 3 minutes.' },
+        { t: 'Ask them to explain it back to you. Where did they get stuck? Write down what you would explain differently.', w: true, reveal: 'Great teachers watch for where people get stuck and try a new way to explain. If someone is confused, it is a clue for the teacher, not a failure of the learner.' },
+        { t: 'How did it feel helping someone learn? Describe it in a sentence.', w: true },
+      ] },
+    { id: 'hosa', name: 'HOSA / Health Careers Club', emoji: '🩺', minutes: 20, careers: ['physician', 'nurse', 'psychologist'],
+      blurb: 'Explore health careers, learn first aid, and compete in health-skill events (HOSA–Future Health Professionals).',
+      commit: 'About 1–3 hours a week.',
+      join: 'Ask your science or health teacher or counselor about HOSA. Some schools have a health science pathway.',
+      steps: [
+        { t: 'Find your pulse on your wrist or neck. Count the beats for 30 seconds and double it. Write your number.', w: true, reveal: 'A resting pulse of about 60–100 beats per minute is typical for most people. Nurses and doctors check this every day.' },
+        { t: 'A friend gets a nosebleed. Write the steps you would take to help.', w: true, reveal: 'Sit up and lean slightly forward (not back), pinch the soft part of the nose for 10 minutes, and breathe through your mouth. Learning first aid like this is a big part of health clubs.' },
+        { t: 'Look up one health career you have never heard of (like physical therapist, radiology tech, or dietitian). Write what they do.', w: true },
+      ] },
+    { id: 'environment-club', name: 'Environmental / Garden Club', emoji: '🌱', minutes: 20, careers: ['env-scientist'],
+      blurb: 'Take care of school gardens, run recycling projects, and study local nature.',
+      commit: 'About 1–2 hours a week.',
+      join: 'Ask your science teacher about an eco club, or look into a school garden, a park clean-up, or iNaturalist.',
+      steps: [
+        { t: 'Go outside for 10 minutes. List 5 living things you notice (plants, bugs, birds, anything).', w: true },
+        { t: 'Look at your trash or recycling for a day. What is one thing you could reuse or cut back on?', w: true, reveal: 'Environmental scientists begin with careful observation and measuring, just like this "waste audit".' },
+        { t: 'Think of one change your school could make to help the environment. Write it down.', w: true },
+      ] },
+    { id: 'business-club', name: 'Entrepreneurship Club (DECA / FBLA)', emoji: '🚀', minutes: 20, careers: ['entrepreneur', 'financial-analyst'],
+      blurb: 'Start mini businesses, pitch ideas, and compete in business events (DECA, FBLA, Junior Achievement).',
+      commit: 'About 1–3 hours a week.',
+      join: 'Ask your business or economics teacher or counselor about DECA, FBLA, or Junior Achievement.',
+      steps: [
+        { t: 'Lemonade stand math: each cup costs you 50¢ to make and you sell it for $1.50. The cups, ice, and sign cost $30 to get started. How many cups do you need to sell to earn back the $30?', w: true, reveal: 'Answer: 30 cups. You earn $1.00 profit per cup ($1.50 − $0.50), so $30 ÷ $1.00 = 30 cups. This is called a break-even point.' },
+        { t: 'Think of a problem that annoys people your age. Write a business idea that could solve it.', w: true },
+        { t: 'Pitch your idea out loud in 60 seconds: the problem, your solution, and why people would pay for it.' },
+      ] },
+    { id: 'investment-club', name: 'Economics / Investment Club', emoji: '💹', minutes: 20, careers: ['financial-analyst', 'entrepreneur', 'data-scientist'],
+      blurb: 'Learn how markets work, follow companies, and practice making money decisions with pretend cash.',
+      commit: 'About 1 hour a week.',
+      join: 'Ask your math or business teacher about an investment club, or look into the Stock Market Game and the Wharton investment competition.',
+      steps: [
+        { t: 'Pick a company you know (a game, shoe, or snack brand). Write three reasons people buy from them.', w: true },
+        { t: 'You have $100 of pretend money to split across 3 companies. How would you split it and why?', w: true, reveal: 'Spreading money across several choices is called diversification. It lowers risk, because if one choice does poorly, the others can balance it out.' },
+        { t: 'What could go wrong for one of your picks? Write one risk.', w: true },
+      ] },
+    { id: 'psych-club', name: 'Psychology / Peer Support Club', emoji: '🧠', minutes: 20, careers: ['psychologist', 'teacher', 'nurse'],
+      blurb: 'Learn how minds and feelings work and practice listening and supporting others.',
+      commit: 'About 1 hour a week.',
+      join: 'Ask your counselor or psychology teacher about a peer support or psychology club.',
+      steps: [
+        { t: 'Ask 3 people (family or friends): "What helps you feel calm when you are stressed?" Write their answers.', w: true },
+        { t: 'Did any answers surprise you? What patterns do you see? Psychologists call this collecting and analyzing data.', w: true, reveal: 'Psychologists turn questions about people into data, then look for patterns. A survey like yours is a small version of real research.' },
+        { t: 'Practice active listening: in your next conversation, repeat back what the person said before you answer. How did it feel?', w: true },
+      ] },
+    { id: 'volunteering', name: 'Community Service / Volunteering', emoji: '🤝', minutes: 15, careers: ['nurse', 'physician', 'teacher', 'psychologist', 'env-scientist'],
+      blurb: 'Help your community at food banks, shelters, animal rescues, libraries, and clean-ups.',
+      commit: 'Anything from one afternoon to 2 hours a week.',
+      join: 'Ask your counselor, check with local libraries and animal shelters, or search for youth volunteer programs near you.',
+      steps: [
+        { t: 'Look up 3 places near you that welcome young volunteers (libraries, shelters, food banks, parks). Write their names.', w: true },
+        { t: 'Which one interests you most and why?', w: true, reveal: 'Volunteering is a great way to try out a field (like healthcare or teaching) while helping people. Colleges and employers also value it.' },
+        { t: 'What would be your first question when you contact them?', w: true },
+      ] },
+    { id: 'photo-video', name: 'Photography / Video Club', emoji: '📷', minutes: 20, careers: ['graphic-designer', 'journalist', 'architect'],
+      blurb: 'Tell stories with photos and videos, for yearbook, social media, or your own projects.',
+      commit: 'About 1–2 hours a week.',
+      join: 'Ask your art or media teacher, or the yearbook advisor.',
+      steps: [
+        { t: 'Take 3 photos of the same object from different angles (close, far, from above). Which one looks best?' },
+        { t: 'Why did you pick that one? Write about the light, angle, or what you wanted people to notice.', w: true, reveal: 'Photographers choose what to show and what to leave out. Framing a photo is making a decision about the story.' },
+        { t: 'Plan a 30-second video to introduce your favorite hobby. Write the 3 scenes you would film.', w: true },
+      ] },
+  ];
+  const RATINGS = [
+    { v: 4, emoji: '😍', label: 'Loved it' },
+    { v: 3, emoji: '🙂', label: 'Liked it' },
+    { v: 2, emoji: '😐', label: 'Not sure' },
+    { v: 1, emoji: '🙁', label: 'Not for me' },
+  ];
+
   const REFLECT_PROMPTS = [
     'What did you learn today, and how does it connect to becoming a {career}?',
     'What was the hardest part of today, and how did you push through?',
@@ -522,10 +687,11 @@ window.PF_DATA = (function () {
     { id: 'thinker', emoji: '💭', name: 'Deep Thinker', desc: '5 reflections accepted.' },
     { id: 'milestone', emoji: '🎖️', name: 'Go-Getter', desc: 'Completed a real-world milestone (competition, club, course…).' },
     { id: 'honest', emoji: '🛡️', name: 'Honest Hustler', desc: '15 tasks done with integrity score 95+.' },
+    { id: 'curious', emoji: '🔭', name: 'Curious Mind', desc: 'Tried 3 extracurricular activities.' },
     { id: 'xp-1000', emoji: '💎', name: 'XP Collector', desc: 'Earned 1,000 XP.' },
   ];
 
   const LEVEL_TITLES = ['Novice', 'Apprentice', 'Explorer', 'Achiever', 'Trailblazer', 'Expert', 'Champion', 'Legend'];
 
-  return { TRAITS, QUESTIONS, subjectsFor, baseSubject, SKILL_LEVELS, STAGES, CAREERS, REFLECT_PROMPTS, DOMAINS, BANK, BADGES, LEVEL_TITLES };
+  return { ACTIVITIES, RATINGS, TRAITS, QUESTIONS, subjectsFor, baseSubject, SKILL_LEVELS, STAGES, CAREERS, REFLECT_PROMPTS, DOMAINS, BANK, BADGES, LEVEL_TITLES };
 })();

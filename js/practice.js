@@ -117,18 +117,19 @@ window.PF_PRACTICE = (function () {
 
   const bankList = (domain) => (window.PF_DATA.BANK[domain] || []).map(([q, choices, a, lv]) => Object.assign(mc(q, choices[a], choices), { level: lv }));
 
-  // Placement quiz: one question per level (generated subjects), or two easy, two medium, one hard (banked subjects).
-  function placementSet(domain) {
-    if (GEN[domain]) return [1, 2, 3, 4, 5].map((lv) => Object.assign(GEN[domain][lv - 1](), { level: lv }));
-    const bank = shuffle(bankList(domain));
-    return [1, 1, 2, 2, 3].map((lv) => { const i = bank.findIndex((b) => b.level === lv); return i < 0 ? null : bank.splice(i, 1)[0]; }).filter(Boolean);
-  }
-  // Turns a placement score into a starting level (banked subjects top out at 3).
-  function placementLevel(domain, correct, total) {
-    if (GEN[domain]) return Math.max(1, Math.min(5, correct));
-    const r = correct / total;
-    return r >= 0.8 ? 3 : r >= 0.4 ? 2 : 1;
+  // Adaptive placement: start mid-level, step up after a right answer and down after a wrong one.
+  // Banked subjects only have content up to level 3.
+  const placementStart = (domain) => (GEN[domain] ? 3 : 2);
+  const placementMax = (domain) => (GEN[domain] ? 5 : 3);
+  function placementQuestion(domain, level, used) {
+    if (GEN[domain]) {
+      let q;
+      for (let i = 0; i < 12; i++) { q = GEN[domain][level - 1](); if (!used.includes(q.q)) break; }
+      return Object.assign(q, { level });
+    }
+    const bank = shuffle(bankList(domain)).filter((b) => !used.includes(b.q));
+    return bank.find((b) => b.level === Math.min(level, 3)) || bank.sort((x, y) => Math.abs(x.level - level) - Math.abs(y.level - level))[0];
   }
 
-  return { makeSet, placementSet, placementLevel, shuffle };
+  return { makeSet, placementStart, placementMax, placementQuestion, shuffle };
 })();

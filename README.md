@@ -5,17 +5,20 @@ Pathfinder helps middle and high school students (grades 6–12) discover a care
 1. **About me**: grade, hobbies, interests, favorite subjects, future goals, and daily time available. The favorite-subject choices change with the grade (middle school, grades 9–10, grades 11–12).
 2. **Personality test**: 18 quick questions scored across six traits (Builder, Thinker, Creator, Helper, Leader, Organizer).
 3. **Career matches**: 14 careers ranked by personality fit, hobbies and interests, favorite subjects, and goals, with the reasons shown.
-4. **My Path**
+4. **Skill check (before any task is assigned)**: a short, ungraded, adaptive check of each subject on the chosen career (4 questions each; questions get easier or harder with the answers; “I'm not sure” is always allowed). It sets the starting level. No schedule is built until it's done (or the student chooses to skip).
+5. **My Path**
    - **Grade-by-grade roadmap** from middle school through 12th grade: courses, clubs, projects, and the competitions and olympiads to aim for (e.g. Data Scientist → MATHCOUNTS, AMC 8/10/12, AIME, USACO, AP Statistics…).
    - **Daily schedule** with a practice quiz, a focus session, and a reflection each day, plus a weekly real-world milestone. Students can edit, add, or remove tasks.
-5. **Adaptive practice**: the first quiz in each subject is a short *placement quiz* that finds the student's starting level (Beginner → Competition-ready). After that, 5-question sets match their level: score 80%+ to level up; under 40% eases back. Daily practice leans toward their weakest subject. Math, statistics, and logic questions are freshly generated every time.
-6. **Adapts day by day**: daily load grows as the student builds stamina, gets lighter after missed days, and adds stretch challenges when they're excelling.
-7. **Integrity tracker**: keeps progress honest.
+6. **Adaptive practice**: starts at the level found by the skill check (Beginner → Competition-ready). After that, 5-question sets match their level: score 80%+ to level up; under 40% eases back. Daily practice leans toward their weakest subject. Math, statistics, and logic questions are freshly generated every time.
+7. **Adapts day by day**: daily load grows as the student builds stamina, gets lighter after missed days, and adds stretch challenges when they're excelling.
+8. **Integrity tracker**: keeps progress honest.
    - Quizzes are auto-graded and timed; answering too fast doesn't count.
    - Focus timers only run while the tab is open and in front; distractions are counted.
    - Reflections are rejected if pasted, repeated, gibberish, or copied from earlier ones.
    - Milestones are self-reported and can be confirmed by a parent or teacher for bonus XP.
-8. **Rewards**: XP, levels, 15 badges, streaks, confetti, and a **prize shop** where parents/teachers set real prizes that students redeem with earned coins.
+10. **Try-outs** (optional, never affect streaks or integrity): 17 short tasters of extracurriculars (robotics, coding club, math team, debate, Mock Trial/Model UN, journalism, HOSA, DECA/FBLA, volunteering and more). Students rate each one (Loved it → Not for me), see how to join a real club, and can add a reminder to their schedule. Activities they enjoy nudge matching careers up.
+11. **Bao the panda** 🐼: the study buddy and logo. Bao's mood follows the student's daily habits (happy → munching bamboo → ready to study → sleepy → missing you) and never scolds. One rest day per week keeps Bao happy without pressure. Students can rename Bao in *Rewards → Settings*.
+12. **Rewards**: XP, levels, 16 badges, streaks, confetti, and a **prize shop** where parents/teachers set real prizes that students redeem with earned coins.
 
 ## Run it on your laptop
 
