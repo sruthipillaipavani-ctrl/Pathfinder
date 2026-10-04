@@ -44,6 +44,8 @@
 
   const career = () => D.CAREERS.find((c) => c.id === S.careerId);
   const skill = (d) => (S.skills[d] = S.skills[d] || { level: 1, history: [] });
+  const isPlaced = (d) => { const s = skill(d); return !!s.placed || s.history.length > 0; };
+  const levelName = (n) => D.SKILL_LEVELS[Math.min(n, 5) - 1];
   const level = () => Math.floor(S.xp / 250) + 1;
   const levelTitle = (l) => D.LEVEL_TITLES[Math.min(l - 1, D.LEVEL_TITLES.length - 1)];
 
@@ -136,7 +138,8 @@
       const traitFit = Object.entries(c.traits).reduce((s, [t, w]) => s + (tr[t] || 0) * w, 0) / wsum; // 0-100
       const has = (phrase) => new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?\\b`).test(text);
       const kw = c.keywords.filter(has);
-      const subj = c.subjects.filter((s) => (p.subjects || []).includes(s));
+      const picked = (p.subjects || []).map(D.baseSubject);
+      const subj = c.subjects.filter((s) => picked.includes(s));
       const named = c.title.toLowerCase().split(/\s*[/()]\s*/).filter(Boolean).some(has);
       const score = Math.min(99, Math.round(traitFit * 0.65 + Math.min(kw.length, 4) * 5 + Math.min(subj.length, 3) * 5 + (named ? 10 : 0)));
       const reasons = [];
@@ -187,7 +190,9 @@
     const st = stamina();
     const total = (S.profile.dailyMinutes || 45) * st.factor;
     const round5 = (n) => Math.max(5, Math.round(n / 5) * 5);
-    const dom = c.domains[idx % c.domains.length];
+    // Every other day, practice goes to the student's weakest subject so levels stay balanced.
+    const weakest = c.domains.slice().sort((a, b) => skill(a).level - skill(b).level)[0];
+    const dom = idx % 2 === 0 ? weakest : c.domains[idx % c.domains.length];
     const ft = c.tasks[idx % c.tasks.length];
     const tasks = [
       { id: uid(), type: 'practice', domain: dom, title: `${D.DOMAINS[dom].name} practice set`, minutes: 10, status: 'todo' },
@@ -356,6 +361,10 @@
       </section>`,
   };
 
+  function subjectChips(grade, selected) {
+    return D.subjectsFor(grade).map(([label]) => `<label class="chip"><input type="checkbox" name="subjects" value="${esc(label)}" ${(selected || []).includes(label) ? 'checked' : ''}><span>${esc(label)}</span></label>`).join('');
+  }
+
   routes.profile = {
     html: () => {
       const p = S.profile || { subjects: [], dailyMinutes: 45, grade: '9' };
@@ -371,7 +380,8 @@
           <label class="full">Hobbies <small>(comma separated)</small><input name="hobbies" value="${esc(p.hobbies)}" placeholder="e.g. chess, drawing, soccer, video games"></label>
           <label class="full">Interests <small>(topics you love learning about)</small><input name="interests" value="${esc(p.interests)}" placeholder="e.g. space, animals, AI, business"></label>
           <fieldset class="full"><legend>Favorite subjects</legend>
-            <div class="chips">${D.SUBJECTS.map((s) => `<label class="chip"><input type="checkbox" name="subjects" value="${esc(s)}" ${p.subjects.includes(s) ? 'checked' : ''}><span>${esc(s)}</span></label>`).join('')}</div>
+            <div class="chips" id="subject-chips">${subjectChips(p.grade, p.subjects)}</div>
+            <small class="muted">These change with your grade.</small>
           </fieldset>
           <label class="full">Future goals & dreams<textarea name="aspirations" rows="3" placeholder="What do you want to do or become someday? Anything goes!">${esc(p.aspirations)}</textarea></label>
           <label class="full">How much time can you spend on your path each day?
@@ -382,6 +392,11 @@
       </section>`;
     },
     bind: () => {
+      const form = $('#profile-form');
+      form.grade.addEventListener('change', () => {
+        const keep = $$('input[name=subjects]:checked', form).map((i) => i.value);
+        $('#subject-chips').innerHTML = subjectChips(form.grade.value, keep);
+      });
       $('#profile-form').addEventListener('submit', (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -498,7 +513,7 @@
 
   function taskIcon(t) { return { practice: '📝', focus: '⏱️', reflect: '💭', milestone: '🎖️' }[t.type]; }
   function taskMeta(t) {
-    const kind = { practice: 'Auto-graded quiz', focus: 'Tracked focus timer', reflect: 'Written reflection', milestone: 'Real-world milestone' }[t.type];
+    const kind = { practice: t.status !== 'done' && t.domain ? (isPlaced(t.domain) ? `Auto-graded quiz · Level ${skill(t.domain).level}` : 'Placement quiz (sets your starting level)') : 'Auto-graded quiz', focus: 'Tracked focus timer', reflect: 'Written reflection', milestone: 'Real-world milestone' }[t.type];
     return `${kind} · ${t.minutes} min${t.stretch ? ' · <span class="tag">stretch</span>' : ''}${t.custom ? ' · <span class="tag">added by you</span>' : ''}`;
   }
   function verifiedLabel(t) {
@@ -619,8 +634,8 @@
           </div>
           <div class="card">
             <h3>Skill levels</h3>
-            ${c.domains.map((d) => { const s = skill(d); return `<div class="skill"><span>${D.DOMAINS[d].emoji} ${D.DOMAINS[d].name}</span><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= s.level ? 'on' : ''}"></i>`).join('')}</span></div>`; }).join('')}
-            <small class="muted">Score 80%+ on a quiz to level up. Level 5 = competition level.</small>
+            ${c.domains.map((d) => { const s = skill(d); return `<div class="skill"><span>${D.DOMAINS[d].emoji} ${D.DOMAINS[d].name}<small class="muted"> ${isPlaced(d) ? levelName(s.level) : '· placement quiz first'}</small></span><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= s.level ? 'on' : ''}"></i>`).join('')}</span></div>`; }).join('')}
+            <small class="muted">Your first quiz in each subject sets your starting level. Score 80%+ to level up. Level 5 = competition level.</small>
           </div>
           ${nextBadge ? `<div class="card next-badge"><span>${nextBadge.emoji}</span><div><small class="muted">Next badge</small><b>${esc(nextBadge.name)}</b><small>${esc(nextBadge.desc)}</small></div></div>` : ''}
         </div>
@@ -760,17 +775,18 @@
       const c = career();
       if (!domain || !D.DOMAINS[domain]) {
         const others = Object.keys(D.DOMAINS).filter((d) => !c.domains.includes(d));
-        const tile = (d) => { const s = skill(d); return `<a class="tile" href="#/practice/${d}"><span>${D.DOMAINS[d].emoji}</span><b>${D.DOMAINS[d].name}</b><small>Level ${s.level} · ${s.history.length} sets</small></a>`; };
+        const tile = (d) => { const s = skill(d); return `<a class="tile" href="#/practice/${d}"><span>${D.DOMAINS[d].emoji}</span><b>${D.DOMAINS[d].name}</b><small>${isPlaced(d) ? `Level ${s.level} · ${levelName(s.level)}` : 'Take placement quiz'}</small></a>`; };
         return `
         <section class="card">
           <h2>📝 Practice</h2>
-          <p class="muted">Every set is 5 questions at your level. Score 80%+ to level up; under 40% and we'll ease back. Free practice earns XP too.</p>
+          <p class="muted">Your first set in each subject is a short placement quiz that finds your starting level. After that, every set is 5 questions at your level: score 80%+ to level up; under 40% and we'll ease back. Free practice earns XP too.</p>
           <h3>For your ${esc(c.title)} path</h3><div class="tiles">${c.domains.map(tile).join('')}</div>
           <h3>Explore other subjects</h3><div class="tiles">${others.map(tile).join('')}</div>
         </section>`;
       }
       const s = skill(domain);
-      quiz = { domain, taskId: params.task, level: s.level, qs: P.makeSet(domain, s.level, 5), i: 0, correct: 0, times: [], shownAt: Date.now() };
+      const placement = !isPlaced(domain);
+      quiz = { domain, taskId: params.task, placement, level: s.level, qs: placement ? P.placementSet(domain) : P.makeSet(domain, s.level, 5), i: 0, correct: 0, times: [], shownAt: Date.now() };
       return `<section class="card narrow quiz" id="quiz"></section>`;
     },
     bind: (domain) => { if (domain && D.DOMAINS[domain]) drawQuestion(); },
@@ -783,7 +799,7 @@
     if (!q) return finishQuiz(box);
     quiz.shownAt = Date.now();
     box.innerHTML = `
-      <div class="quiz-head"><span>${D.DOMAINS[quiz.domain].emoji} ${D.DOMAINS[quiz.domain].name} · Level ${quiz.level}</span><span>${quiz.i + 1} / ${quiz.qs.length}</span></div>
+      <div class="quiz-head"><span>${D.DOMAINS[quiz.domain].emoji} ${D.DOMAINS[quiz.domain].name} · ${quiz.placement ? 'Placement quiz (questions get harder)' : `Level ${quiz.level}`}</span><span>${quiz.i + 1} / ${quiz.qs.length}</span></div>
       <div class="progress"><div style="width:${(quiz.i / quiz.qs.length) * 100}%"></div></div>
       <h2 class="question">${esc(q.q)}</h2>
       <div class="choices">${q.choices.map((ch, i) => `<button class="choice" data-c="${i}">${esc(ch)}</button>`).join('')}</div>
@@ -804,17 +820,29 @@
     const s = skill(quiz.domain);
     const avgTime = quiz.times.reduce((a, b) => a + b, 0) / quiz.times.length;
     const rushed = avgTime < 2.5;
-    s.history.push({ date: today(), acc, level: quiz.level });
     let msg = '';
-    if (rushed) {
-      integrity(-4, `Answered a ${D.DOMAINS[quiz.domain].name} quiz in ${avgTime.toFixed(1)}s per question (too fast to be real work)`);
-      msg = 'That was really fast, so your level stays the same this time. Take your time and work each problem out!';
-    } else if (acc >= 0.8 && s.level < 5) { s.level++; msg = `🚀 Level up! ${D.DOMAINS[quiz.domain].name} is now Level ${s.level}. Questions will get harder.`; }
-    else if (acc < 0.4 && s.level > 1) { s.level--; msg = `We eased ${D.DOMAINS[quiz.domain].name} back to Level ${s.level} so you can master the basics first.`; }
-    else msg = acc >= 0.8 ? 'Perfect mastery: you are at the top level!' : 'Keep practicing at this level. Score 80% to level up.';
+    if (quiz.placement) {
+      if (rushed) {
+        integrity(-4, `Rushed a ${D.DOMAINS[quiz.domain].name} placement quiz (${avgTime.toFixed(1)}s per question)`);
+        msg = 'That was too fast to find your real level, so you were not placed. Try again and work each problem out!';
+      } else {
+        s.level = P.placementLevel(quiz.domain, quiz.correct, quiz.qs.length);
+        s.placed = true;
+        s.history.push({ date: today(), acc, level: s.level, placement: true });
+        msg = `📍 Your starting level in ${D.DOMAINS[quiz.domain].name} is Level ${s.level} (${levelName(s.level)}). Practice will match it, and rise as you improve.`;
+      }
+    } else {
+      s.history.push({ date: today(), acc, level: quiz.level });
+      if (rushed) {
+        integrity(-4, `Answered a ${D.DOMAINS[quiz.domain].name} quiz in ${avgTime.toFixed(1)}s per question (too fast to be real work)`);
+        msg = 'That was really fast, so your level stays the same this time. Take your time and work each problem out!';
+      } else if (acc >= 0.8 && s.level < 5) { s.level++; msg = `🚀 Level up! ${D.DOMAINS[quiz.domain].name} is now Level ${s.level} (${levelName(s.level)}). Questions will get harder.`; }
+      else if (acc < 0.4 && s.level > 1) { s.level--; msg = `We eased ${D.DOMAINS[quiz.domain].name} back to Level ${s.level} so you can master the basics first.`; }
+      else msg = acc >= 0.8 ? 'Perfect mastery: you are at the top level!' : 'Keep practicing at this level. Score 80% to level up.';
+    }
     if (acc === 1 && !rushed) award('quiz-whiz');
     const xp = (10 + quiz.correct * 4 + quiz.level * 2) * (rushed ? 0.3 : 1);
-    if (quiz.taskId && findTask(quiz.taskId)) completeTask(quiz.taskId, 'auto', { acc, level: quiz.level }, xp, 'Practice set');
+    if (quiz.taskId && findTask(quiz.taskId)) completeTask(quiz.taskId, 'auto', { acc, level: quiz.placement ? s.level : quiz.level }, xp, 'Practice set');
     else { addXP(xp * 0.6, 'Free practice'); checkBadges(); }
     save();
     renderNav('practice');

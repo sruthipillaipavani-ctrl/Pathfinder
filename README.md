@@ -2,13 +2,13 @@
 
 Pathfinder helps middle and high school students (grades 6–12) discover a career that fits who they are, then turns it into a real plan they can follow day by day.
 
-1. **About me**: grade, hobbies, interests, favorite subjects, future goals, and daily time available.
+1. **About me**: grade, hobbies, interests, favorite subjects, future goals, and daily time available. The favorite-subject choices change with the grade (middle school, grades 9–10, grades 11–12).
 2. **Personality test**: 18 quick questions scored across six traits (Builder, Thinker, Creator, Helper, Leader, Organizer).
 3. **Career matches**: 14 careers ranked by personality fit, hobbies and interests, favorite subjects, and goals, with the reasons shown.
 4. **My Path**
    - **Grade-by-grade roadmap** from middle school through 12th grade: courses, clubs, projects, and the competitions and olympiads to aim for (e.g. Data Scientist → MATHCOUNTS, AMC 8/10/12, AIME, USACO, AP Statistics…).
    - **Daily schedule** with a practice quiz, a focus session, and a reflection each day, plus a weekly real-world milestone. Students can edit, add, or remove tasks.
-5. **Adaptive practice**: 5-question sets in 10 subjects at 5 difficulty levels. Score 80%+ to level up; under 40% eases back. Math, statistics, and logic questions are freshly generated every time.
+5. **Adaptive practice**: the first quiz in each subject is a short *placement quiz* that finds the student's starting level (Beginner → Competition-ready). After that, 5-question sets match their level: score 80%+ to level up; under 40% eases back. Daily practice leans toward their weakest subject. Math, statistics, and logic questions are freshly generated every time.
 6. **Adapts day by day**: daily load grows as the student builds stamina, gets lighter after missed days, and adds stretch challenges when they're excelling.
 7. **Integrity tracker**: keeps progress honest.
    - Quizzes are auto-graded and timed; answering too fast doesn't count.

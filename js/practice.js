@@ -115,5 +115,20 @@ window.PF_PRACTICE = (function () {
     return shuffle(pool).slice(0, count).map((b) => Object.assign(mc(b.q, b.choices[b.a], b.choices), { level: b.lv }));
   }
 
-  return { makeSet, shuffle };
+  const bankList = (domain) => (window.PF_DATA.BANK[domain] || []).map(([q, choices, a, lv]) => Object.assign(mc(q, choices[a], choices), { level: lv }));
+
+  // Placement quiz: one question per level (generated subjects), or two easy, two medium, one hard (banked subjects).
+  function placementSet(domain) {
+    if (GEN[domain]) return [1, 2, 3, 4, 5].map((lv) => Object.assign(GEN[domain][lv - 1](), { level: lv }));
+    const bank = shuffle(bankList(domain));
+    return [1, 1, 2, 2, 3].map((lv) => { const i = bank.findIndex((b) => b.level === lv); return i < 0 ? null : bank.splice(i, 1)[0]; }).filter(Boolean);
+  }
+  // Turns a placement score into a starting level (banked subjects top out at 3).
+  function placementLevel(domain, correct, total) {
+    if (GEN[domain]) return Math.max(1, Math.min(5, correct));
+    const r = correct / total;
+    return r >= 0.8 ? 3 : r >= 0.4 ? 2 : 1;
+  }
+
+  return { makeSet, placementSet, placementLevel, shuffle };
 })();

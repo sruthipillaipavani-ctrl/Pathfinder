@@ -31,8 +31,30 @@ window.PF_DATA = (function () {
     { t: 'C', q: 'I am good with numbers, budgets, or keeping track of details.' },
   ];
 
-  const SUBJECTS = ['Math', 'Biology', 'Chemistry', 'Physics', 'Computer Science', 'English',
-    'History', 'Government', 'Economics', 'Art', 'Music', 'Psychology', 'Foreign Language', 'PE / Health'];
+  // Favorite-subject choices change with grade. Each entry is [label shown, base subject used for career matching].
+  const SUBJECT_SETS = {
+    ms: [['Math', 'Math'], ['Pre-Algebra / Algebra 1', 'Math'], ['Life Science', 'Biology'], ['Physical Science', 'Physics'],
+      ['Earth & Space Science', 'Physics'], ['Science Experiments & Labs', 'Chemistry'], ['Coding / Technology', 'Computer Science'],
+      ['English / Reading & Writing', 'English'], ['Social Studies', 'History'], ['Debate & Civics', 'Government'],
+      ['Money & Business', 'Economics'], ['Understanding People & Feelings', 'Psychology'], ['Art', 'Art'], ['Music', 'Music'],
+      ['Foreign Language', 'Foreign Language'], ['PE / Health', 'PE / Health']],
+    '9-10': [['Algebra 2 / Geometry', 'Math'], ['Biology', 'Biology'], ['Chemistry', 'Chemistry'], ['Physics', 'Physics'],
+      ['Intro to Computer Science', 'Computer Science'], ['English', 'English'], ['World / US History', 'History'],
+      ['Civics / Government', 'Government'], ['Personal Finance / Economics', 'Economics'], ['Psychology', 'Psychology'],
+      ['Art / Design', 'Art'], ['Music', 'Music'], ['Foreign Language', 'Foreign Language'], ['PE / Health', 'PE / Health']],
+    '11-12': [['Pre-Calculus / Calculus', 'Math'], ['Statistics', 'Math'], ['Honors / AP Biology', 'Biology'],
+      ['Honors / AP Chemistry', 'Chemistry'], ['Honors / AP Physics', 'Physics'], ['Environmental Science', 'Biology'],
+      ['AP Computer Science', 'Computer Science'], ['English Language & Literature', 'English'], ['US / European History', 'History'],
+      ['Government & Politics', 'Government'], ['Micro / Macroeconomics', 'Economics'], ['Business & Entrepreneurship', 'Economics'],
+      ['Psychology', 'Psychology'], ['Art & Design', 'Art'], ['Music', 'Music'], ['Foreign Language', 'Foreign Language'], ['Health Sciences', 'PE / Health']],
+  };
+  const stageGroup = (grade) => { const n = Number(grade); return n <= 8 ? 'ms' : n <= 10 ? '9-10' : '11-12'; };
+  const subjectsFor = (grade) => SUBJECT_SETS[stageGroup(grade)];
+  const baseSubject = (label) => {
+    for (const set of Object.values(SUBJECT_SETS)) { const hit = set.find(([l]) => l === label); if (hit) return hit[1]; }
+    return label;
+  };
+  const SKILL_LEVELS = ['Beginner', 'Developing', 'Proficient', 'Advanced', 'Competition-ready'];
 
   const STAGES = [
     { key: 'ms', label: 'Middle School (6–8)' },
@@ -505,5 +527,5 @@ window.PF_DATA = (function () {
 
   const LEVEL_TITLES = ['Novice', 'Apprentice', 'Explorer', 'Achiever', 'Trailblazer', 'Expert', 'Champion', 'Legend'];
 
-  return { TRAITS, QUESTIONS, SUBJECTS, STAGES, CAREERS, REFLECT_PROMPTS, DOMAINS, BANK, BADGES, LEVEL_TITLES };
+  return { TRAITS, QUESTIONS, subjectsFor, baseSubject, SKILL_LEVELS, STAGES, CAREERS, REFLECT_PROMPTS, DOMAINS, BANK, BADGES, LEVEL_TITLES };
 })();
