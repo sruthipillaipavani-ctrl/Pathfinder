@@ -143,7 +143,7 @@ window.PF_DATA = (function () {
       traits: { R: 3, I: 3, C: 1 }, subjects: ['Physics', 'Math', 'Computer Science'],
       keywords: ['build', 'robot', 'cars', 'machines', 'lego', 'rockets', 'fix', 'engines', 'drones', 'tools', 'space'],
       skills: ['Physics & mechanics', 'Math through calculus', 'CAD / 3D design', 'Hands-on building'],
-      domains: ['math', 'science', 'logic'],
+      domains: ['math', 'science', 'logic', 'coding'],
       path: {
         ms: ['Robotics club (FIRST LEGO League / VEX IQ)', 'Get ahead in math', 'Build kits: rockets, circuits, models'],
         9: ['Geometry / Algebra 2', 'Intro to Engineering Design (if offered)', 'Join FIRST Robotics or VEX'],
@@ -287,7 +287,7 @@ window.PF_DATA = (function () {
       traits: { I: 3, R: 2, S: 1 }, subjects: ['Biology', 'Chemistry', 'Math'],
       keywords: ['nature', 'animals', 'outdoors', 'hiking', 'climate', 'plants', 'ocean', 'environment', 'gardening', 'camping'],
       skills: ['Biology & chemistry', 'Field work', 'Data analysis', 'Science communication'],
-      domains: ['science', 'stats', 'writing'],
+      domains: ['science', 'stats', 'writing', 'coding'],
       path: {
         ms: ['Join an eco / garden club', 'Do a backyard nature survey', 'Science Olympiad ecology events'],
         9: ['Biology', 'Environmental club', 'Volunteer for a park clean-up'],
@@ -311,7 +311,7 @@ window.PF_DATA = (function () {
       traits: { C: 3, I: 2, E: 1 }, subjects: ['Math', 'Economics', 'Computer Science'],
       keywords: ['money', 'stocks', 'numbers', 'business', 'saving', 'math', 'spreadsheets', 'economics'],
       skills: ['Math & statistics', 'Economics', 'Spreadsheets', 'Careful decision making'],
-      domains: ['economics', 'math', 'stats'],
+      domains: ['economics', 'math', 'stats', 'coding'],
       path: {
         ms: ['Track your own allowance / savings', 'Get ahead in math', 'Join a stock market simulation game'],
         9: ['Personal Finance course', 'Algebra 2', 'Join FBLA or investment club'],

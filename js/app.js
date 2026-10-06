@@ -27,6 +27,7 @@
       { id: uid(), name: 'Extra 30 minutes of free time', cost: 80 },
       { id: uid(), name: 'Favorite treat or snack', cost: 120 },
     ],
+    version: 2, codeDone: {},
     tryouts: {}, activity: {}, rest: {},
     settings: { demo: false, pandaName: 'Bao' },
   });
@@ -35,7 +36,11 @@
   function load() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (raw) return Object.assign(blank(), JSON.parse(raw));
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved.version !== 2) { saved.plan = null; saved.version = 2; } // v2: lessons first, Python exercises
+        return Object.assign(blank(), saved);
+      }
     } catch (e) { /* fall through */ }
     return blank();
   }
@@ -201,18 +206,17 @@
     const st = stamina();
     const total = (S.profile.dailyMinutes || 45) * st.factor;
     const round5 = (n) => Math.max(5, Math.round(n / 5) * 5);
-    // Every other day, practice goes to the student's weakest subject so levels stay balanced.
+    // Each day has one theme subject: learn it first, then practice it. Every other day the theme is the weakest subject.
     const weakest = c.domains.slice().sort((a, b) => skill(a).level - skill(b).level)[0];
     const dom = idx % 2 === 0 ? weakest : c.domains[idx % c.domains.length];
-    const ft = c.tasks[idx % c.tasks.length];
-    const tasks = [
-      { id: uid(), type: 'practice', domain: dom, title: `${D.DOMAINS[dom].name} practice set`, minutes: 10, status: 'todo' },
-      { id: uid(), type: 'focus', title: ft.title, skill: ft.skill, minutes: round5(total - 15), status: 'todo' },
-      { id: uid(), type: 'reflect', title: 'Daily reflection', prompt: D.REFLECT_PROMPTS[idx % D.REFLECT_PROMPTS.length].replace(/\{career\}/g, c.title), minutes: 5, status: 'todo' },
-    ];
+    const name = D.DOMAINS[dom].name;
+    const tasks = [{ id: uid(), type: 'lesson', domain: dom, title: `Learn: ${name}`, minutes: round5(total * 0.35), status: 'todo' }];
+    if (dom === 'coding') tasks.push({ id: uid(), type: 'code', domain: 'coding', title: 'Python exercise', minutes: round5(total * 0.45), status: 'todo' });
+    else tasks.push({ id: uid(), type: 'practice', domain: dom, n: Math.max(4, Math.min(7, Math.round(5 * st.factor))), title: `${name} practice`, minutes: round5(total * 0.35), status: 'todo' });
+    tasks.push({ id: uid(), type: 'reflect', title: 'Daily reflection', prompt: D.REFLECT_PROMPTS[idx % D.REFLECT_PROMPTS.length].replace(/\{career\}/g, c.title), minutes: 5, status: 'todo' });
     if (st.stretch) {
       const d2 = c.domains[(idx + 1) % c.domains.length];
-      tasks.push({ id: uid(), type: 'practice', domain: d2, stretch: true, title: `Stretch challenge: ${D.DOMAINS[d2].name}`, minutes: 10, status: 'todo' });
+      if (d2 !== 'coding') tasks.push({ id: uid(), type: 'practice', domain: d2, stretch: true, title: `Stretch challenge: ${D.DOMAINS[d2].name}`, minutes: 10, status: 'todo' });
     }
     if (idx % 7 === 6) {
       const ms = milestones(c);
@@ -320,11 +324,11 @@
     stopFocusTimer();
     let { name, arg, params } = currentRoute();
     if (!S.profile && name !== 'profile' && name !== 'welcome') name = 'welcome';
-    else if (S.profile && !S.personality && ['today', 'schedule', 'careers', 'practice', 'focus', 'explore', 'tryout', 'skillcheck'].includes(name)) name = 'test';
-    else if (S.personality && !S.careerId && ['today', 'schedule', 'practice', 'focus', 'skillcheck'].includes(name)) name = 'careers';
+    else if (S.profile && !S.personality && ['today', 'schedule', 'careers', 'practice', 'focus', 'lesson', 'code', 'explore', 'tryout', 'skillcheck'].includes(name)) name = 'test';
+    else if (S.personality && !S.careerId && ['today', 'schedule', 'practice', 'focus', 'lesson', 'code', 'skillcheck'].includes(name)) name = 'careers';
     if (!name) name = S.careerId ? 'today' : S.personality ? 'careers' : S.profile ? 'test' : 'welcome';
     // Before any task is assigned, the student's level is checked with a short placement.
-    if (S.careerId && unplaced().length && ['today', 'schedule', 'practice', 'focus'].includes(name)) name = 'skillcheck';
+    if (S.careerId && unplaced().length && ['today', 'schedule', 'practice', 'focus', 'lesson', 'code'].includes(name)) name = 'skillcheck';
     if (name === 'skillcheck' && S.careerId && !unplaced().length) name = 'today';
     if (currentRoute().name && currentRoute().name !== name) history.replaceState(null, '', `#/${name}`);
     pl = name === 'practice' ? pl : null;
@@ -529,30 +533,45 @@
     },
   };
 
-  function taskIcon(t) { return { practice: '📝', focus: '⏱️', reflect: '💭', milestone: '🎖️' }[t.type]; }
+  function taskIcon(t) { return { lesson: '📖', code: '🐍', practice: '📝', focus: '⏱️', reflect: '💭', milestone: '🎖️' }[t.type]; }
   function taskMeta(t) {
-    const kind = { practice: t.status !== 'done' && t.domain ? (isPlaced(t.domain) ? `Auto-graded quiz · Level ${skill(t.domain).level}` : 'Placement quiz (sets your starting level)') : 'Auto-graded quiz', focus: 'Tracked focus timer', reflect: 'Written reflection', milestone: 'Real-world milestone' }[t.type];
+    const kind = {
+      lesson: 'Short lesson + 3-question check',
+      code: 'Python exercise · checked by running your code',
+      practice: t.status !== 'done' && t.domain ? (isPlaced(t.domain) ? `Auto-graded practice · Level ${skill(t.domain).level}` : 'Placement quiz (sets your starting level)') : 'Auto-graded practice',
+      focus: 'Tracked focus timer', reflect: 'Written reflection', milestone: 'Real-world milestone',
+    }[t.type];
     return `${kind} · ${t.minutes} min${t.stretch ? ' · <span class="tag">stretch</span>' : ''}${t.custom ? ' · <span class="tag">added by you</span>' : ''}`;
   }
   function verifiedLabel(t) {
     if (t.status !== 'done') return '';
     const r = t.result || {};
+    if (t.type === 'lesson') return `<span class="ok">✓ Understood (${r.correct}/${r.of} on the check)</span>`;
+    if (t.type === 'code') return `<span class="ok">✓ Python: all ${r.tests} tests passed${r.solution ? ' (with the worked solution)' : ''}</span>`;
     if (t.type === 'practice') return `<span class="ok">✓ ${Math.round(r.acc * 100)}% correct (level ${r.level})</span>`;
     if (t.type === 'focus') return `<span class="ok">✓ ${r.minutes} focused min · ${r.switches} distraction${r.switches === 1 ? '' : 's'}</span>`;
     if (t.type === 'reflect') return `<span class="ok">✓ Reflection accepted</span>`;
     return `<span class="ok self">✓ Self-reported${r.verifier ? ` · confirmed by ${esc(r.verifier)}` : ''}</span>`;
+  }
+  // A practice set or Python exercise unlocks after the lesson on the same subject is finished.
+  const lockedByLesson = (t, day) => (t.type === 'practice' || t.type === 'code') && !t.custom && !t.stretch &&
+    day.tasks.some((x) => x.type === 'lesson' && x.domain === t.domain && x.status !== 'done');
+  function startAction(t, day) {
+    if (lockedByLesson(t, day)) return '<span class="muted small">🔒 Finish the lesson first</span>';
+    if (t.type === 'lesson') return `<a class="btn small" href="#/lesson/${t.id}">Start lesson</a>`;
+    if (t.type === 'code') return `<a class="btn small" href="#/code/${t.id}">Open editor</a>`;
+    if (t.type === 'practice') return `<a class="btn small" href="#/practice/${t.domain}?task=${t.id}">Start</a>`;
+    if (t.type === 'focus') return `<a class="btn small" href="#/focus/${t.id}">Start timer</a>`;
+    if (t.type === 'reflect') return `<button class="btn small" data-reflect="${t.id}">Write</button>`;
+    return `<button class="btn small" data-milestone="${t.id}">Report</button>`;
   }
 
   function taskRow(t, date) {
     const isToday = date === today();
     const canDo = date <= today() && t.status !== 'done';
     let action = '';
-    if (canDo) {
-      if (t.type === 'practice') action = `<a class="btn small" href="#/practice/${t.domain}?task=${t.id}">Start quiz</a>`;
-      if (t.type === 'focus') action = `<a class="btn small" href="#/focus/${t.id}">Start timer</a>`;
-      if (t.type === 'reflect') action = `<button class="btn small" data-reflect="${t.id}">Write</button>`;
-      if (t.type === 'milestone') action = `<button class="btn small" data-milestone="${t.id}">Report</button>`;
-    } else if (date > today()) action = `<span class="muted small">Unlocks ${isToday ? 'today' : prettyDate(date)}</span>`;
+    if (canDo) action = startAction(t, S.plan.days[date]);
+    else if (date > today()) action = `<span class="muted small">Unlocks ${isToday ? 'today' : prettyDate(date)}</span>`;
     return `
       <li class="task ${t.status}" data-id="${t.id}">
         <span class="task-icon">${taskIcon(t)}</span>
@@ -737,7 +756,7 @@
             <div class="task-body"><b>${esc(x.title)}</b><small>${taskMeta(x)}</small>${verifiedLabel(x)}<div class="inline-form" id="form-${x.id}"></div></div>
             <div class="task-action">
               ${x.status !== 'done' && d >= t ? `<button class="icon" title="Edit" data-edit="${x.id}">✏️</button><button class="icon" title="Remove" data-del="${x.id}">🗑️</button>` : ''}
-              ${x.status !== 'done' && d === t ? (x.type === 'practice' ? `<a class="btn small" href="#/practice/${x.domain}?task=${x.id}">Start</a>` : x.type === 'focus' ? `<a class="btn small" href="#/focus/${x.id}">Start</a>` : x.type === 'reflect' ? `<button class="btn small" data-reflect="${x.id}">Write</button>` : `<button class="btn small" data-milestone="${x.id}">Report</button>`) : ''}
+              ${x.status !== 'done' && d === t ? startAction(x, day) : ''}
             </div></li>`).join('') || '<li class="muted small">Rest day — no tasks.</li>'}
         </ul>
         ${d >= t ? `<div class="day-foot"><button class="link" data-add="${d}">+ Add task</button>${day.edited ? `<button class="link" data-reset="${d}">↺ Reset day</button>` : ''}</div>` : ''}
@@ -749,21 +768,21 @@
     return `
       <form class="form mini">
         <label class="full">Task<input name="title" required maxlength="90" value="${esc(t.title || '')}"></label>
-        <label>Type<select name="type">${[['focus', '⏱️ Focus session (timer)'], ['practice', '📝 Practice quiz'], ['reflect', '💭 Reflection'], ['milestone', '🎖️ Milestone']].map(([v, l]) => `<option value="${v}" ${t.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>Type<select name="type">${[['lesson', '📖 Lesson + check'], ['code', '🐍 Python exercise'], ['practice', '📝 Practice quiz'], ['focus', '⏱️ Focus session (timer)'], ['reflect', '💭 Reflection'], ['milestone', '🎖️ Milestone']].map(([v, l]) => `<option value="${v}" ${t.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label>Minutes<input name="minutes" type="number" min="5" max="180" step="5" value="${t.minutes || 20}"></label>
-        <label class="full domain-pick">Quiz subject<select name="domain">${Object.keys(D.DOMAINS).map((d) => `<option value="${d}" ${(t.domain || c.domains[0]) === d ? 'selected' : ''}>${D.DOMAINS[d].name}</option>`).join('')}</select></label>
+        <label class="full domain-pick">Subject<select name="domain">${Object.keys(D.DOMAINS).map((d) => `<option value="${d}" ${(t.domain || c.domains[0]) === d ? 'selected' : ''}>${D.DOMAINS[d].name}</option>`).join('')}</select></label>
         <div class="full row"><button type="button" class="link cancel">Cancel</button><button class="btn small">Save</button></div>
       </form>`;
   }
 
   function bindTaskForm(box, onSave) {
     const form = $('form', box);
-    const sync = () => { $('.domain-pick', form).style.display = form.type.value === 'practice' ? '' : 'none'; };
+    const sync = () => { $('.domain-pick', form).style.display = ['practice', 'lesson'].includes(form.type.value) ? '' : 'none'; };
     form.type.addEventListener('change', sync); sync();
     $('.cancel', form).addEventListener('click', () => { box.innerHTML = ''; });
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      onSave({ title: form.title.value.trim(), type: form.type.value, minutes: Math.max(5, Number(form.minutes.value) || 10), domain: form.domain.value });
+      onSave({ title: form.title.value.trim(), type: form.type.value, minutes: Math.max(5, Number(form.minutes.value) || 10), domain: form.type.value === 'code' ? 'coding' : form.domain.value });
     });
   }
 
@@ -805,12 +824,13 @@
           <h2>📝 Practice</h2>
           <p class="muted">Your first set in each subject is a short placement quiz that finds your starting level. After that, every set is 5 questions at your level: score 80%+ to level up; under 40% and we'll ease back. Free practice earns XP too.</p>
           <h3>For your ${esc(c.title)} path</h3><div class="tiles">${c.domains.map(tile).join('')}</div>
+          ${c.domains.includes('coding') ? `<h3>🐍 Code Lab</h3><p class="muted">Write real Python for your ${esc(c.title)} job. Your code runs against tests, so you know it works.</p><a class="btn" href="#/code">Open Code Lab</a>` : ''}
           <h3>Explore other subjects</h3><div class="tiles">${others.map(tile).join('')}</div>
         </section>`;
       }
       const s = skill(domain);
       if (!isPlaced(domain)) { quiz = null; pl = newPlacement([domain], 'single', params.task); }
-      else { pl = null; quiz = { domain, taskId: params.task, level: s.level, qs: P.makeSet(domain, s.level, 5), i: 0, correct: 0, times: [], shownAt: Date.now() }; }
+      else { pl = null; quiz = { domain, taskId: params.task, level: s.level, qs: P.makeSet(domain, s.level, (params.task && findTask(params.task) && findTask(params.task).task.n) || 5), i: 0, correct: 0, times: [], shownAt: Date.now() }; }
       return `<section class="card narrow quiz" id="quiz"></section>`;
     },
     bind: (domain) => { if (!domain || !D.DOMAINS[domain]) return; if (pl) drawPlacement(); else drawQuestion(); },
@@ -1305,6 +1325,264 @@
       }));
     },
   };
+
+
+  // ---------- lessons (learn first, then a 3-question understanding check) ----------
+  let lq = null;
+  const tierFor = (lv) => (lv <= 2 ? 1 : lv === 3 ? 2 : 3);
+  const TIER_NAMES = ['Foundations', 'Core ideas', 'Going further'];
+
+  routes.lesson = {
+    html: (id) => {
+      const f = findTask(id);
+      if (!f || f.task.type !== 'lesson') return `<section class="card narrow"><p>Lesson not found.</p><a class="btn" href="#/today">Back</a></section>`;
+      const t = f.task, s = skill(t.domain);
+      const tier = t.tier || tierFor(s.level);
+      const lesson = window.PF_LESSONS[t.domain][tier - 1];
+      lq = { id, domain: t.domain, tier, level: Math.min(s.level, [2, 3, 5][tier - 1]), opened: Date.now(), i: 0, correct: 0 };
+      return `
+      <section class="card narrow lesson" id="lesson">
+        <p class="muted small">📖 ${D.DOMAINS[t.domain].emoji} ${D.DOMAINS[t.domain].name} · ${TIER_NAMES[tier - 1]}</p>
+        <h2>${esc(lesson.title)}</h2>
+        ${lesson.body.map((p) => `<p>${esc(p)}</p>`).join('')}
+        <pre class="example">${esc(lesson.example)}</pre>
+        <h3>Remember</h3>
+        <ul class="checklist">${lesson.points.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+        <div class="row"><span class="muted small">Next: 3 quick questions to check it clicked. Take your time. Re-reading is fine.</span><button class="btn" id="lesson-go">I'm ready → check me</button></div>
+        ${t.fails >= 2 && tier > 1 ? `<p class="adapt">Still feeling stuck? <button class="link" id="lesson-easier">Show me an easier lesson</button></p>` : ''}
+      </section>`;
+    },
+    bind: (id) => {
+      const go1 = $('#lesson-go');
+      if (!go1) return;
+      go1.addEventListener('click', () => { lq.qs = P.makeSet(lq.domain, lq.level, 3); lq.i = 0; lq.correct = 0; lq.times = []; drawLessonQ(); });
+      const easier = $('#lesson-easier');
+      if (easier) easier.addEventListener('click', () => { const t = findTask(id).task; t.tier = Math.max(1, (t.tier || lq.tier) - 1); t.fails = 0; save(); render(); });
+    },
+  };
+
+  function drawLessonQ() {
+    const box = $('#lesson');
+    const q = lq.qs[lq.i];
+    if (!q) return finishLessonCheck(box);
+    lq.shownAt = Date.now();
+    box.innerHTML = `
+      <div class="quiz-head"><span>Check your understanding</span><span>${lq.i + 1} / ${lq.qs.length}</span></div>
+      <div class="progress"><div style="width:${(lq.i / lq.qs.length) * 100}%"></div></div>
+      <h2 class="question">${esc(q.q)}</h2>
+      <div class="choices">${q.choices.map((ch, i) => `<button class="choice" data-c="${i}">${esc(ch)}</button>`).join('')}</div>
+      <div class="feedback"></div>`;
+    $$('.choice', box).forEach((b) => b.addEventListener('click', () => {
+      const picked = Number(b.dataset.c), right = picked === q.answer;
+      if (right) lq.correct++;
+      $$('.choice', box).forEach((x, i) => { x.disabled = true; if (i === q.answer) x.classList.add('right'); else if (i === picked) x.classList.add('wrong'); });
+      $('.feedback', box).innerHTML = `<p class="${right ? 'ok' : 'bad'}">${right ? '✓ Correct!' : `✗ The answer is <b>${esc(q.choices[q.answer])}</b>`}</p><button class="btn">${lq.i + 1 < lq.qs.length ? 'Next →' : 'See results'}</button>`;
+      $('.feedback .btn', box).addEventListener('click', () => { lq.i++; drawLessonQ(); });
+    }));
+  }
+
+  function finishLessonCheck(box) {
+    const f = findTask(lq.id), t = f.task;
+    const passed = lq.correct >= 2;
+    if (passed) {
+      const readSecs = (lq.shownAt - lq.opened) / 1000 - 8; // rough time before the check began
+      const skimmed = (Date.now() - lq.opened) / 1000 < 25;
+      completeTask(lq.id, 'auto', { correct: lq.correct, of: lq.qs.length }, (12 + lq.correct * 4) * (skimmed ? 0.4 : 1), 'Lesson');
+      box.innerHTML = `<div class="result"><div class="center-art">${pandaSVG('happy', 100)}</div>
+        <h2>${lq.correct === 3 ? 'You got it! 🌟' : 'Nice, that clicked! 👍'}</h2>
+        <p>${lq.correct}/${lq.qs.length} on the check.${skimmed ? ' (That was quick. If it felt too easy, your next lessons will move up as you practice.)' : ''} Now the practice will make sense.</p>
+        <div class="row center"><a class="btn big" href="#/today">Continue →</a></div></div>`;
+    } else {
+      t.fails = (t.fails || 0) + 1; save();
+      box.innerHTML = `<div class="result"><div class="center-art">${pandaSVG('content', 90)}</div>
+        <h2>Let's read it once more</h2>
+        <p>${lq.correct}/${lq.qs.length}. That's okay! The check is just to make sure it clicked before practice. Read the lesson again and try fresh questions.</p>
+        <div class="row center"><button class="btn" id="reread">Read the lesson again</button>
+        ${t.fails >= 2 && lq.tier > 1 ? `<button class="btn ghost" id="easier">Try an easier lesson</button>` : ''}</div></div>`;
+      $('#reread').addEventListener('click', () => render());
+      const e = $('#easier');
+      if (e) e.addEventListener('click', () => { t.tier = Math.max(1, lq.tier - 1); t.fails = 0; save(); render(); });
+    }
+  }
+
+  // ---------- Python runner (Pyodide in a Web Worker) ----------
+  let py = null;
+  function pyStart() {
+    if (py) return py;
+    const p = { w: new Worker('js/pyworker.js?v=' + (window.PF_V || 0)), pending: new Map(), seq: 0 };
+    p.ready = new Promise((resolve, reject) => { p.ok = resolve; p.fail = reject; });
+    p.ready.catch(() => {});
+    p.w.onmessage = (e) => {
+      const m = e.data;
+      if (m.ready) return p.ok();
+      const h = p.pending.get(m.id);
+      if (h) { p.pending.delete(m.id); m.ok ? h.resolve(m.result) : h.reject(new Error(m.error)); }
+    };
+    p.w.onerror = () => { p.fail(new Error('load')); p.pending.forEach((h) => h.reject(new Error('load'))); if (py === p) py = null; };
+    py = p;
+    return p;
+  }
+  function pyRun(code, fn, tests) {
+    const p = pyStart();
+    return p.ready.then(() => new Promise((resolve, reject) => {
+      const id = ++p.seq;
+      const timer = setTimeout(() => { p.pending.delete(id); p.w.terminate(); if (py === p) py = null; reject(new Error('timeout')); }, 6000);
+      p.pending.set(id, { resolve: (r) => { clearTimeout(timer); resolve(r); }, reject: (e) => { clearTimeout(timer); reject(e); } });
+      p.w.postMessage({ id, code, fn, tests });
+    }));
+  }
+  const pyRepr = (v) => (v === null ? 'None' : v === true ? 'True' : v === false ? 'False' : typeof v === 'string' ? JSON.stringify(v)
+    : Array.isArray(v) ? '[' + v.map(pyRepr).join(', ') + ']'
+    : typeof v === 'object' ? '{' + Object.entries(v).map(([k, x]) => JSON.stringify(k) + ': ' + pyRepr(x)).join(', ') + '}' : String(v));
+
+  // ---------- Code Lab: Python exercises for your job ----------
+  const EXS = () => window.PF_EXERCISES;
+  const relevantExercises = () => EXS().filter((e) => e.careers.includes('*') || (S.careerId && e.careers.includes(S.careerId)));
+  function pickExercise() {
+    const lv = skill('coding').level;
+    const all = relevantExercises();
+    let cands = all.filter((e) => !S.codeDone[e.id] && e.level <= lv + 1);
+    if (!cands.length) cands = all.filter((e) => !S.codeDone[e.id]);
+    if (!cands.length) cands = all.slice().sort((a, b) => S.codeDone[a.id].date.localeCompare(S.codeDone[b.id].date)).slice(0, 4);
+    cands.sort((a, b) => (Math.abs(a.level - lv) + (a.careers.includes('*') ? 0.5 : 0)) - (Math.abs(b.level - lv) + (b.careers.includes('*') ? 0.5 : 0)));
+    return cands[0];
+  }
+  function jobName(ex) { const c = D.CAREERS.find((x) => ex.careers.includes(x.id)); return c ? `${c.emoji} ${c.title}` : '🐍 Python skills'; }
+
+  let cs = null;
+  routes.code = {
+    html: (id) => {
+      let ex, task = null;
+      const f = id && findTask(id);
+      if (f && f.task.type === 'code') { task = f.task; if (!task.ex) { task.ex = pickExercise().id; save(); } ex = EXS().find((e) => e.id === task.ex); }
+      else if (id) ex = EXS().find((e) => e.id === id);
+      if (!ex) {
+        const row = (e) => `<a class="exrow" href="#/code/${e.id}"><span>${S.codeDone[e.id] ? '✅' : '⬜'}</span><b>${esc(e.title)}</b><small class="muted">${jobName(e)} · Level ${e.level}</small></a>`;
+        const mine = relevantExercises().filter((e) => !e.careers.includes('*')), core = relevantExercises().filter((e) => e.careers.includes('*'));
+        return `<section class="card narrow"><h2>🐍 Code Lab</h2>
+          <p class="muted">Write real Python. Your code runs on tests (including hidden ones), so you'll know it truly works. Your Python level: <b>${levelName(skill('coding').level)}</b>.</p>
+          ${mine.length ? `<h3>For your job</h3><div class="exlist">${mine.map(row).join('')}</div>` : ''}
+          <h3>Python skills</h3><div class="exlist">${core.map(row).join('')}</div></section>`;
+      }
+      cs = { ex, taskId: task && task.id, runs: 0, fails: 0, hints: 0, sol: false, start: Date.now(), pasted: 0, done: false };
+      const lock = task && S.plan && lockedByLesson(task, findTask(task.id).day);
+      return `
+      <section class="card code-card">
+        <a class="link small" href="${task ? '#/today' : '#/code'}">← ${task ? 'Back to today' : 'Code Lab'}</a>
+        <div class="code-head"><span class="tag">🐍 Python · Level ${ex.level}</span><span class="tag">${esc(jobName(ex))}</span></div>
+        <h2>${esc(ex.title)}</h2>
+        <p class="story">${esc(ex.story)}</p>
+        <p><b>Your task:</b> ${esc(ex.task)}</p>
+        <details class="learn" open><summary>💡 Ideas you'll use</summary><pre class="example">${esc(ex.learn)}</pre></details>
+        <textarea id="code" class="code" spellcheck="false" autocapitalize="off" autocomplete="off" rows="${Math.max(8, ex.starter.split('\n').length + 3)}">${esc(ex.starter)}</textarea>
+        <div class="row"><div class="btns"><button class="btn" id="run">▶ Run tests</button><button class="btn ghost" id="hint">💡 Hint</button><button class="link" id="reset-code">Reset code</button></div><span id="py-status" class="muted small">Loading Python…</span></div>
+        ${lock ? '<p class="adapt">Tip: do the lesson for this subject first. It teaches the ideas you need here.</p>' : ''}
+        <div id="hint-box"></div>
+        <div id="results"></div>
+      </section>`;
+    },
+    bind: (id) => {
+      if (!cs || !$('#code')) return;
+      const ta = $('#code'), status = $('#py-status');
+      const st = pyStart();
+      st.ready.then(() => { status.textContent = 'Python ready ✓'; }).catch(() => { status.textContent = '⚠️ Python could not load (it needs internet the first time).'; });
+      ta.addEventListener('paste', (e) => { cs.pasted += (e.clipboardData || window.clipboardData).getData('text').length; });
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') { e.preventDefault(); const a = ta.selectionStart; ta.setRangeText('    ', a, ta.selectionEnd, 'end'); }
+      });
+      $('#reset-code').addEventListener('click', () => { if (confirm('Reset your code to the starting template?')) ta.value = cs.ex.starter; });
+      $('#hint').addEventListener('click', () => {
+        const h = cs.ex.hints;
+        if (cs.hints >= h.length) { toast('No more hints. You can do this! 💪'); return; }
+        cs.hints++;
+        $('#hint-box').insertAdjacentHTML('beforeend', `<div class="hint"><b>Hint ${cs.hints}:</b><pre class="example">${esc(h[cs.hints - 1])}</pre></div>`);
+      });
+      $('#run').addEventListener('click', () => runCode());
+    },
+  };
+
+  async function runCode() {
+    if (cs.done) return;
+    const ta = $('#code'), status = $('#py-status'), res = $('#results'), btn = $('#run');
+    btn.disabled = true; status.textContent = 'Running your code…';
+    let out;
+    try { out = await pyRun(ta.value, cs.ex.fn, cs.ex.tests); }
+    catch (e) {
+      btn.disabled = false;
+      status.textContent = '';
+      res.innerHTML = e.message === 'timeout'
+        ? `<div class="result-box bad">⏱️ Your code ran for too long and was stopped. Check your loop: does it ever end? (Python is restarting, which takes a few seconds.)</div>`
+        : `<div class="result-box bad">⚠️ Python couldn't start. It loads from the internet the first time, so check your connection and refresh the page.</div>`;
+      return;
+    }
+    btn.disabled = false; status.textContent = 'Python ready ✓';
+    cs.runs++;
+    if (out.fatal) { cs.fails++; res.innerHTML = `<div class="result-box bad"><b>Your code has a problem:</b><br>${esc(out.fatal)}</div>${solutionOffer()}`; bindSolution(); return; }
+    const total = out.results.length, passed = out.results.filter((r) => r.ok).length;
+    const vis = out.results.slice(0, 2), hidden = out.results.slice(2);
+    const hiddenPass = hidden.filter((r) => r.ok).length;
+    const call = (t) => `${cs.ex.fn}(${t.a.map(pyRepr).join(', ')})`;
+    const rows = vis.map((r, i) => {
+      const t = cs.ex.tests[i];
+      return `<li class="${r.ok ? 'pass' : 'fail'}"><b>${r.ok ? '✓' : '✗'}</b> <code>${esc(call(t))}</code><br>
+        ${r.ok ? `<small>gave ${esc(pyRepr(r.got))}</small>` : `<small>expected <code>${esc(pyRepr(t.e))}</code>, ${r.err ? `but got an error: ${esc(r.err)}` : `but got <code>${esc(pyRepr(r.got))}</code>`}${r.got === null && !r.err ? ' — did you forget <code>return</code>?' : ''}</small>`}</li>`;
+    }).join('');
+    const hiddenRow = hidden.length ? `<li class="${hiddenPass === hidden.length ? 'pass' : 'fail'}"><b>${hiddenPass === hidden.length ? '✓' : '✗'}</b> 🔒 ${hiddenPass} of ${hidden.length} hidden tests passed${hiddenPass < hidden.length ? '. Think about unusual inputs (empty, zero, negative, repeated values).' : ''}</li>` : '';
+    const printed = out.stdout ? `<div class="stdout"><b>Your print() output:</b><pre>${esc(out.stdout)}</pre></div>` : '';
+    if (passed === total) return codePassed(res, rows + hiddenRow, printed);
+    cs.fails++;
+    res.innerHTML = `<div class="result-box"><b>${passed} of ${total} tests passed.</b> Keep going, you're closer than you think.</div><ul class="tests">${rows}${hiddenRow}</ul>${printed}${solutionOffer()}`;
+    bindSolution();
+  }
+
+  function solutionOffer() {
+    return cs.fails >= 3 && !cs.sol ? `<p class="adapt">Stuck for a while? <button class="link" id="show-sol">Show me a worked solution</button> (you'll earn less XP, and we'll give you easier practice next).</p>` : '';
+  }
+  function bindSolution() {
+    const b = $('#show-sol');
+    if (!b) return;
+    b.addEventListener('click', () => {
+      if (!confirm('Show the worked solution? You can still type it in yourself to finish, but it earns less XP.')) return;
+      cs.sol = true;
+      $('#hint-box').insertAdjacentHTML('beforeend', `<div class="hint"><b>Worked solution:</b><pre class="example">${esc(cs.ex.solution)}</pre><small class="muted">Read it, understand each line, then type it yourself and run the tests.</small></div>`);
+      b.closest('p').remove();
+    });
+  }
+
+  function codePassed(res, rows, printed) {
+    cs.done = true;
+    const ex = cs.ex, ta = $('#code');
+    const code = ta.value;
+    ta.readOnly = true;
+    const elapsed = (Date.now() - cs.start) / 1000;
+    let xp = 20 + ex.level * 6;
+    xp *= 1 - Math.min(0.4, cs.hints * 0.1);
+    if (cs.sol) xp *= 0.3;
+    const pastedMost = cs.pasted > 0.6 * code.length && code.length > 40;
+    const tooFast = !cs.sol && elapsed < 25 && code.length > 60 && cs.runs <= 1;
+    if (pastedMost) { integrity(-3, 'Pasted most of a Python solution instead of writing it'); xp *= 0.5; }
+    else if (tooFast) { integrity(-2, `Solved "${ex.title}" suspiciously fast`); xp *= 0.5; }
+    // Python level follows how cleanly the student solves things.
+    const s = skill('coding');
+    const clean = !cs.sol && cs.hints <= 1 && cs.fails <= 3 && !pastedMost;
+    let note = '';
+    // Only exercises at (or above) the student's level count as progress; easier ones are just review.
+    if (clean && ex.level >= s.level) { s.clean = (s.clean || 0) + 1; s.struggle = 0; if (s.clean >= 2 && s.level < 5) { s.level++; s.clean = 0; note = `🚀 Python is now Level ${s.level} (${levelName(s.level)})!`; } }
+    else if (cs.sol) { s.struggle = (s.struggle || 0) + 1; s.clean = 0; if (s.struggle >= 2 && s.level > 1) { s.level--; s.struggle = 0; note = `We eased Python back to Level ${s.level} so you can build confidence first.`; } }
+    s.history.push({ date: today(), acc: clean ? 1 : 0.5, level: s.level, code: true });
+    S.codeDone[ex.id] = { date: today(), clean };
+    if (cs.taskId && findTask(cs.taskId)) completeTask(cs.taskId, 'code', { tests: ex.tests.length, attempts: cs.runs, hints: cs.hints, solution: cs.sol }, xp, 'Python exercise');
+    else { addXP(xp * 0.6, 'Python practice'); checkBadges(); }
+    save(); renderNav('code');
+    const next = cs.taskId ? '<a class="btn big" href="#/today">Back to today →</a>' : '<a class="btn big" href="#/code">Next exercise →</a>';
+    res.innerHTML = `<div class="result-box ok-box"><div class="center-art">${pandaSVG('happy', 90)}</div>
+      <h3 class="center">All tests passed! 🎉</h3>
+      <p class="center">${cs.sol ? 'Nice work typing it out. Next time you will write it yourself.' : cs.runs === 1 ? 'First try!' : `Solved in ${cs.runs} runs. Debugging is the real skill.`}${note ? '<br><b>' + esc(note) + '</b>' : ''}</p>
+      <ul class="tests">${rows}</ul>${printed}
+      <details><summary>See a reference solution</summary><pre class="example">${esc(ex.solution)}</pre></details>
+      <div class="row center">${next}</div></div>`;
+    confetti();
+  }
 
   window.addEventListener('hashchange', render);
   window.addEventListener('DOMContentLoaded', render);
