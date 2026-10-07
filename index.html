@@ -5,22 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pathfinder</title>
   <meta name="description" content="Discover careers that fit you and build a day-by-day path to get there.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20120%20120%27%3E%3Ccircle%20cx%3D%2729%27%20cy%3D%2731%27%20r%3D%2714%27%20fill%3D%27%231d1b2e%27/%3E%3Ccircle%20cx%3D%2791%27%20cy%3D%2731%27%20r%3D%2714%27%20fill%3D%27%231d1b2e%27/%3E%3Ccircle%20cx%3D%2760%27%20cy%3D%2764%27%20r%3D%2742%27%20fill%3D%27%23fff%27%20stroke%3D%27%231d1b2e%27%20stroke-width%3D%274%27/%3E%3Cellipse%20cx%3D%2742%27%20cy%3D%2758%27%20rx%3D%2710.5%27%20ry%3D%2713.5%27%20transform%3D%27rotate%28-18%2042%2058%29%27%20fill%3D%27%231d1b2e%27/%3E%3Cellipse%20cx%3D%2778%27%20cy%3D%2758%27%20rx%3D%2710.5%27%20ry%3D%2713.5%27%20transform%3D%27rotate%2818%2078%2058%29%27%20fill%3D%27%231d1b2e%27/%3E%3Cellipse%20cx%3D%2760%27%20cy%3D%2772%27%20rx%3D%276.5%27%20ry%3D%274.5%27%20fill%3D%27%231d1b2e%27/%3E%3C/svg%3E">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2314785d'/%3E%3Cpath d='M20 48V16h15a12 12 0 0 1 0 24H28v8zm8-16h7a4 4 0 1 0 0-8h-7z' fill='white'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>/* dev: always load the newest files (remove for production hosting) */
     window.PF_V = Date.now();
     document.write('<link rel="stylesheet" href="css/styles.css?v=' + PF_V + '">');</script>
 </head>
 <body>
   <header class="topbar">
-    <a href="#/" class="brand"><svg viewBox="0 0 120 120" width="34" height="34" aria-hidden="true"><circle cx="29" cy="31" r="14" fill="#1d1b2e"/><circle cx="91" cy="31" r="14" fill="#1d1b2e"/><circle cx="60" cy="64" r="42" fill="#fff" stroke="#1d1b2e" stroke-width="3"/><ellipse cx="42" cy="58" rx="10.5" ry="13.5" transform="rotate(-18 42 58)" fill="#1d1b2e"/><ellipse cx="78" cy="58" rx="10.5" ry="13.5" transform="rotate(18 78 58)" fill="#1d1b2e"/><path d="M36 58q6-8 12 0M72 58q6-8 12 0" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/><ellipse cx="60" cy="72" rx="6.5" ry="4.5" fill="#1d1b2e"/><path d="M47 79q13 17 26 0z" fill="#ff6b8e" stroke="#1d1b2e" stroke-width="2.5" stroke-linejoin="round"/></svg> <span>Pathfinder</span></a>
+    <a href="#/" class="brand"><span class="brand-mark" aria-hidden="true">P</span><span>Pathfinder</span></a>
     <nav id="nav"></nav>
     <div id="hud" class="hud"></div>
+    <a id="exit" class="exit" href="#/" aria-label="Close">✕</a>
   </header>
   <main id="app"></main>
   <div id="toasts" aria-live="polite"></div>
-  <footer class="foot">Pathfinder · your progress is saved on this device.</footer>
+  <footer class="foot">Pathfinder · your progress is saved on this device · Career data: U.S. BLS &amp; U.S. News</footer>
   <script>
     ['data', 'careers_extra', 'practice', 'lessons', 'exercises', 'app'].forEach(function (n) {
       document.write('<script src="js/' + n + '.js?v=' + PF_V + '"><\/script>');

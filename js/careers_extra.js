@@ -158,7 +158,7 @@
       skills: ['Storytelling', 'Persuasion', 'Data basics', 'Creativity'], domains: ['people', 'writing', 'economics'],
       path: path(['Promote a club, event, or small business', 'Study ads you like and ask why they work', 'Practice speaking and writing'], ['Business or marketing class', 'Join DECA', 'Run your school\'s social account'], ['Graphic design basics', 'Create a real campaign for an event', 'Learn basic analytics'], ['AP Economics', 'AP English Language', 'Lead a marketing team in DECA'], ['Apply to business, marketing, or communications programs', 'Intern with a local business']),
       competitions: ['DECA marketing events', 'FBLA events', 'Junior Achievement'] },
-    { id: 'actuary', title: 'Actuary', emoji: '📉', cat: 'business', pay: 130000, growth: 9, edu: "Bachelor's degree",
+    { id: 'actuary', title: 'Actuary', emoji: '🧮', cat: 'business', pay: 130000, growth: 9, edu: "Bachelor's degree",
       summary: 'A math detective of risk: use statistics to predict what might go wrong (like accidents or illness) and put a price on it.',
       does: ['Use data to estimate how likely events are', 'Help insurance companies set fair prices', 'Pass professional exams and explain results'],
       traits: { C: 3, I: 3 }, subjects: ['Math', 'Economics', 'Computer Science'],

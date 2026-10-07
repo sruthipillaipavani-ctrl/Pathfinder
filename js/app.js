@@ -29,7 +29,7 @@
     ],
     version: 2, codeDone: {},
     tryouts: {}, activity: {}, rest: {},
-    settings: { demo: false, pandaName: 'Bao' },
+    settings: { demo: false },
   });
   let S = load();
 
@@ -38,6 +38,7 @@
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const saved = JSON.parse(raw);
+        if (saved.settings) delete saved.settings.pandaName;
         if (saved.version !== 2) { saved.plan = null; saved.version = 2; } // v2: lessons first, Python exercises
         return Object.assign(blank(), saved);
       }
@@ -53,7 +54,6 @@
   const isPlaced = (d) => { const s = skill(d); return !!s.placed || s.history.length > 0; };
   const levelName = (n) => D.SKILL_LEVELS[Math.min(n, 5) - 1];
   const unplaced = () => (S.careerId ? career().domains.filter((d) => !isPlaced(d)) : []);
-  const pandaName = () => (S.settings && S.settings.pandaName) || 'Bao';
   const level = () => Math.floor(S.xp / 250) + 1;
   const levelTitle = (l) => D.LEVEL_TITLES[Math.min(l - 1, D.LEVEL_TITLES.length - 1)];
 
@@ -149,6 +149,8 @@
       const traitFit = Object.entries(c.traits).reduce((s, [t, w]) => s + (tr[t] || 0) * w, 0) / wsum; // 0-100
       const has = (phrase) => new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?\\b`).test(text);
       const kw = c.keywords.filter(has);
+      // Interests the student tapped (as friendly labels) that connect to this career.
+      const likedTiles = (p.picks || []).map((id) => D.INTEREST_TILES.find((t) => t.id === id)).filter((t) => t && t.kw.some((k) => c.keywords.includes(k)));
       const picked = (p.subjects || []).map(D.baseSubject);
       const subj = c.subjects.filter((s) => picked.includes(s));
       const named = c.title.toLowerCase().split(/\s*[/()]\s*/).filter(Boolean).some(has);
@@ -160,7 +162,8 @@
       const reasons = [];
       const topTraits = Object.entries(c.traits).sort((a, b) => b[1] - a[1]).slice(0, 2).filter(([t]) => tr[t] >= 55);
       if (topTraits.length) reasons.push(`Your <b>${topTraits.map(([t]) => D.TRAITS[t].name).join(' + ')}</b> side fits this job`);
-      if (kw.length) reasons.push(`You mentioned <b>${kw.slice(0, 3).map(esc).join(', ')}</b>`);
+      if (likedTiles.length) reasons.push(`You love <b>${likedTiles.slice(0, 3).map((t) => esc(t.label.toLowerCase())).join(', ')}</b>`);
+      else if (kw.length) reasons.push(`You mentioned <b>${kw.slice(0, 3).map(esc).join(', ')}</b>`);
       if (subj.length) reasons.push(`You enjoy <b>${subj.map(esc).join(', ')}</b>`);
       if (named) reasons.push('It matches a goal you wrote down');
       if (loved.length) reasons.push(`You enjoyed trying <b>${loved.slice(0, 2).map((a) => esc(a.name)).join(', ')}</b>`);
@@ -213,7 +216,7 @@
     const tasks = [{ id: uid(), type: 'lesson', domain: dom, title: `Learn: ${name}`, minutes: round5(total * 0.35), status: 'todo' }];
     if (dom === 'coding') tasks.push({ id: uid(), type: 'code', domain: 'coding', title: 'Python exercise', minutes: round5(total * 0.45), status: 'todo' });
     else tasks.push({ id: uid(), type: 'practice', domain: dom, n: Math.max(4, Math.min(7, Math.round(5 * st.factor))), title: `${name} practice`, minutes: round5(total * 0.35), status: 'todo' });
-    tasks.push({ id: uid(), type: 'reflect', title: 'Daily reflection', prompt: D.REFLECT_PROMPTS[idx % D.REFLECT_PROMPTS.length].replace(/\{career\}/g, c.title), minutes: 5, status: 'todo' });
+    tasks.push({ id: uid(), type: 'reflect', title: 'Daily reflection', prompt: fillCareer(D.REFLECT_PROMPTS[idx % D.REFLECT_PROMPTS.length], c.title), minutes: 5, status: 'todo' });
     if (st.stretch) {
       const d2 = c.domains[(idx + 1) % c.domains.length];
       if (d2 !== 'coding') tasks.push({ id: uid(), type: 'practice', domain: d2, stretch: true, title: `Stretch challenge: ${D.DOMAINS[d2].name}`, minutes: 10, status: 'todo' });
@@ -223,6 +226,11 @@
       tasks.push({ id: uid(), type: 'milestone', title: ms[Math.floor(idx / 7) % ms.length], minutes: 15, status: 'todo' });
     }
     return { tasks, edited: false };
+  }
+
+  // Prompts say "a {career}"; swap in the right article ("an Actuary", "a Pilot").
+  function fillCareer(text, title) {
+    return text.replace(/\ba \{career\}/g, `${/^[aeio]/i.test(title) ? 'an' : 'a'} ${title}`).replace(/\{career\}/g, title);
   }
 
   function milestones(c) {
@@ -320,13 +328,21 @@
     const params = Object.fromEntries(new URLSearchParams(query || ''));
     return { name: path.split('/')[0] || '', arg: path.split('/')[1], params };
   }
+  const FOCUS = ['welcome', 'start', 'skillcheck', 'lesson', 'code', 'focus', 'tryout'];
+  const ALIASES = { careers: 'reveal', test: 'start', me: 'rewards', home: 'today' };
+  let timers = [];
+  const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
+  const exitTarget = (n) => (n === 'tryout' ? '#/explore?tab=tryouts' : n === 'start' ? '#/' : S.careerId ? '#/today' : '#/reveal');
+
   function render() {
     stopFocusTimer();
+    clearTimers();
     let { name, arg, params } = currentRoute();
-    if (!S.profile && name !== 'profile' && name !== 'welcome') name = 'welcome';
-    else if (S.profile && !S.personality && ['today', 'schedule', 'careers', 'practice', 'focus', 'lesson', 'code', 'explore', 'tryout', 'skillcheck'].includes(name)) name = 'test';
-    else if (S.personality && !S.careerId && ['today', 'schedule', 'practice', 'focus', 'lesson', 'code', 'skillcheck'].includes(name)) name = 'careers';
-    if (!name) name = S.careerId ? 'today' : S.personality ? 'careers' : S.profile ? 'test' : 'welcome';
+    name = ALIASES[name] || name;
+    const STUDY = ['today', 'schedule', 'practice', 'focus', 'lesson', 'code', 'skillcheck'];
+    if (!S.personality) { if (name !== 'welcome' && name !== 'start') name = S.profile ? 'start' : 'welcome'; }
+    else if (!S.careerId && STUDY.includes(name)) name = 'reveal';
+    if (!name) name = S.careerId ? 'today' : S.personality ? 'reveal' : S.profile ? 'start' : 'welcome';
     // Before any task is assigned, the student's level is checked with a short placement.
     if (S.careerId && unplaced().length && ['today', 'schedule', 'practice', 'focus', 'lesson', 'code'].includes(name)) name = 'skillcheck';
     if (name === 'skillcheck' && S.careerId && !unplaced().length) name = 'today';
@@ -334,85 +350,305 @@
     pl = name === 'practice' ? pl : null;
     if (S.careerId && !unplaced().length) ensureSchedule();
     const view = routes[name] || routes.welcome;
-    $('#app').innerHTML = view.html(arg, params);
+    const focusMode = FOCUS.includes(name) || ((name === 'practice' || name === 'code') && !!arg);
+    document.body.classList.toggle('focus', focusMode);
+    document.body.dataset.route = name;
+    const app = $('#app');
+    app.className = name === 'explore' ? 'wide' : '';
+    app.innerHTML = view.html(arg, params);
+    $('#exit').setAttribute('href', exitTarget(name));
     renderNav(name);
     if (view.bind) view.bind(arg, params);
     window.scrollTo(0, 0);
   }
 
   function renderNav(active) {
-    const steps = [
-      ['profile', 'About me', true],
-      ['test', 'Personality', !!S.profile],
-      ['careers', 'Careers', !!S.personality],
-      ['today', 'Today', !!S.careerId],
-      ['schedule', 'My Path', !!S.careerId],
-      ['practice', 'Practice', !!S.careerId],
-      ['explore', 'Try-outs', !!S.personality],
-      ['rewards', 'Rewards', !!S.profile],
-    ];
-    $('#nav').innerHTML = steps.map(([k, label, on]) =>
-      `<a href="#/${k}" class="${active === k ? 'active' : ''} ${on ? '' : 'locked'}" ${on ? '' : 'aria-disabled="true" tabindex="-1"'}>${label}</a>`).join('');
-    $('#hud').innerHTML = S.profile ? `
-      <a href="#/today" class="hud-panda" title="${esc(pandaName())} the panda">${pandaSVG(pandaState().mood, 34)}</a>
-      <span title="Level">⭐ Lv ${level()}</span>
-      <span title="XP">${S.xp} XP</span>
-      <span title="Coins">🪙 ${S.coins}</span>
-      <span title="Streak">🔥 ${streak()}</span>` : '';
+    const act = { career: 'explore', tryout: 'explore', lesson: 'today', focus: 'today', code: 'practice', profile: 'rewards' }[active] || active;
+    if (!S.personality) { $('#nav').innerHTML = ''; $('#hud').innerHTML = ''; return; }
+    const items = S.careerId
+      ? [['today', '🏠', 'Today'], ['schedule', '🗺️', 'Path'], ['practice', '🧠', 'Practice'], ['explore', '🔭', 'Explore']]
+      : [['reveal', '✨', 'Matches'], ['explore', '🔭', 'Explore']];
+    items.push(['rewards', '', 'Me']);
+    $('#nav').innerHTML = items.map(([k, ico, label]) =>
+      `<a href="#/${k}" class="${act === k ? 'active' : ''}">${ico ? `<span class="ico">${ico}</span>` : ''}${label}</a>`).join('');
+    $('#hud').innerHTML = S.careerId ? `<a class="chip-stat" href="#/rewards" title="Day streak">🔥 ${streak()}</a><a class="chip-stat" href="#/rewards" title="Level">⭐ ${level()}</a>` : '';
   }
 
   // ---------- views ----------
+  const money = (n) => (n == null ? 'Varies' : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
+  const shortEdu = (e) => (/^Medical/.test(e) ? 'Medical school' : /^Law/.test(e) ? 'Law school' : /^Doctoral/.test(e) ? 'Doctorate' : /^Master/.test(e) ? "Master's" : /^Bachelor/.test(e) ? "Bachelor's" : /apprentice/i.test(e) ? 'Apprenticeship' : /^No set/.test(e) ? 'No set path' : e);
+  function facts(c) {
+    const g = c.growth;
+    return `<div class="facts">
+      <div class="fact"><b>${money(c.pay)}</b><small>median pay / year</small></div>
+      <div class="fact"><b class="${g > 0 ? 'up' : g < 0 ? 'down' : ''}">${g == null ? '—' : (g > 0 ? '▲ ' : g < 0 ? '▼ ' : '') + Math.abs(g) + '%'}</b><small>job growth, 2025–35</small></div>
+      <div class="fact"><b>${esc(shortEdu(c.edu || ''))}</b><small>typical education</small></div>
+      ${c.usn ? `<div class="fact"><b>#${c.usn}</b><small>U.S. News 2026</small></div>` : ''}
+    </div>`;
+  }
+  const article = (t) => (/^[aeio]/i.test(t) ? 'an' : 'a');
+
+  // ---------- landing (the hook) ----------
   routes.welcome = {
-    html: () => `
-      <section class="hero">
-        <div class="hero-text">
-          <h1>Find your path. <span class="grad">Build it day by day.</span></h1>
-          <p class="lead">Pathfinder helps middle and high school students discover careers that fit who they are,
-          then turns that dream into a real plan: the right classes, competitions, olympiads, and daily practice
-          that adapts to you, with badges and rewards along the way.</p>
-          <a class="btn big" href="#/profile">Get started →</a>
-          <div class="hero-panda">${pandaSVG('happy', 150)}<div class="bubble">Hi, I'm ${esc(pandaName())}! Let's find your path together. 🎋</div></div>
-        </div>
-        <div class="hero-steps">
-          ${[['🙋', 'Tell us about you', 'Hobbies, interests, favorite subjects, and goals.'],
-             ['🧠', 'Take the personality test', '18 quick questions, about 3 minutes.'],
-             ['💼', 'Get job matches', 'See careers that fit you, and why.'],
-             ['🗺️', 'Check your level, get your path', 'A quick skill check, then a grade-by-grade roadmap and a daily plan you can edit.'],
-             ['🐼', 'Keep your panda happy', 'Show up each day, try new activities, and earn badges and prizes.']]
-             .map(([e, t, d], i) => `<div class="step"><span class="step-n">${i + 1}</span><span class="step-e">${e}</span><div><b>${t}</b><p>${d}</p></div></div>`).join('')}
-        </div>
-      </section>`,
+    html: () => {
+      const back = S.profile && S.personality;
+      const c0 = P.shuffle(D.CAREERS)[0];
+      return `
+      <section class="landing">
+        <p class="eyebrow">${back ? `Welcome back, ${esc(S.profile.name)}` : 'Career planning for students'}</p>
+        <h1>I want to be<br><span class="rotator" id="rot">${article(c0.title)} ${esc(c0.title)} ${c0.emoji}</span></h1>
+        <p class="sub">${back ? 'Pick up where you left off.' : 'Explore careers that fit your interests, then build a practical plan for classes, activities, and skills.'}</p>
+        <a class="btn big" href="#/${back ? (S.careerId ? 'today' : 'reveal') : 'start'}">${back ? 'Continue →' : 'Find my career →'}</a>
+        <p class="fine">${back ? '' : 'About 2 minutes · Free · No account required'}</p>
+      </section>`;
+    },
+    bind: () => {
+      const el = $('#rot');
+      const order = P.shuffle(D.CAREERS);
+      let i = 0;
+      timers.push(setInterval(() => {
+        el.classList.add('out');
+        setTimeout(() => { const c = order[++i % order.length]; el.textContent = `${article(c.title)} ${c.title} ${c.emoji}`; el.classList.remove('out'); }, 260);
+      }, 2000));
+    },
   };
+
+  // ---------- quick start: one question at a time ----------
+  let ob = null;
+  let revealFresh = false;
+  const OB_STEPS = ['name', 'grade', 'interests', 'subjects', 'quiz'];
+  const OB_QUIZ = 12;
+  const FACES = [['1', 'Not me'], ['2', 'A little'], ['3', 'Sometimes'], ['4', 'Mostly'], ['5', 'Totally me']];
+
+  function obInit(params) {
+    const p = S.profile;
+    const toQuiz = p && (!S.personality || params.step === 'quiz');
+    ob = { step: toQuiz ? 'quiz' : 'name', qi: 0, answers: {}, name: p ? p.name : '', grade: p ? String(p.grade) : '', picks: p && p.picks ? p.picks.slice() : [], subjects: p ? p.subjects.slice() : [] };
+  }
 
   function subjectChips(grade, selected) {
     return D.subjectsFor(grade).map(([label]) => `<label class="chip"><input type="checkbox" name="subjects" value="${esc(label)}" ${(selected || []).includes(label) ? 'checked' : ''}><span>${esc(label)}</span></label>`).join('');
   }
 
+  routes.start = {
+    html: (arg, params) => { obInit(params); return `<section class="ob" id="ob"></section>`; },
+    bind: () => drawStart(),
+  };
+
+  function obSaveProfile() {
+    const picked = D.INTEREST_TILES.filter((t) => ob.picks.includes(t.id));
+    S.profile = Object.assign({ aspirations: '', dailyMinutes: 45 }, S.profile || {}, {
+      name: ob.name, grade: ob.grade, picks: ob.picks.slice(), subjects: ob.subjects.slice(),
+      hobbies: picked.map((t) => t.label).join(', '),
+      interests: [...new Set(picked.flatMap((t) => t.kw))].join(', '),
+    });
+    save();
+  }
+
+  function drawStart() {
+    const box = $('#ob');
+    if (!box || !ob) return;
+    const si = OB_STEPS.indexOf(ob.step);
+    const done = ob.step === 'quiz' ? 4 + ob.qi : si;
+    const pct = Math.round((done / (4 + OB_QUIZ)) * 100);
+    const back = () => { const k = OB_STEPS.indexOf(ob.step); if (ob.step === 'quiz' && ob.qi > 0) ob.qi--; else if (k > 0) { ob.step = OB_STEPS[k - 1]; } drawStart(); };
+    const shell = (say, inner, foot) => `
+      <div class="ob-top"><button class="ob-back" id="ob-back" ${ob.step === 'name' ? 'hidden' : ''} aria-label="Back">←</button><div class="progress"><div style="width:${pct}%"></div></div></div>
+      <p class="ob-context">${esc(say.t)}</p>
+      ${inner}${foot ? `<div class="ob-foot">${foot}</div>` : ''}`;
+    const bindBack = () => { const b = $('#ob-back'); if (b && !b.hidden) b.addEventListener('click', back); };
+
+    if (ob.step === 'name') {
+      box.innerHTML = shell({ t: 'First, a few details to personalize your career matches.' },
+        `<h1>What should I call you?</h1><input class="big-input" id="ob-name" maxlength="30" placeholder="Your first name" autocomplete="given-name" value="${esc(ob.name)}">`,
+        `<span></span><button class="btn big" id="ob-next" ${ob.name.trim() ? '' : 'disabled'}>Continue →</button>`);
+      const inp = $('#ob-name'), nx = $('#ob-next');
+      inp.focus();
+      const go1 = () => { if (!inp.value.trim()) return; ob.name = inp.value.trim(); ob.step = 'grade'; drawStart(); };
+      inp.addEventListener('input', () => { nx.disabled = !inp.value.trim(); });
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go1(); });
+      nx.addEventListener('click', go1);
+    } else if (ob.step === 'grade') {
+      box.innerHTML = shell({ t: `Thanks, ${ob.name}. Your grade helps us make useful course suggestions.` },
+        `<h1>Which grade are you in?</h1><div class="grades">${[6, 7, 8, 9, 10, 11, 12].map((g) => `<button class="grade-btn ${String(g) === ob.grade ? 'sel' : ''}" data-g="${g}">${g}<small>${g <= 8 ? 'middle' : 'high'}</small></button>`).join('')}</div>`);
+      $$('.grade-btn').forEach((b) => b.addEventListener('click', () => {
+        if (ob.grade !== b.dataset.g) ob.subjects = []; // subject choices depend on grade
+        ob.grade = b.dataset.g; b.classList.add('sel');
+        setTimeout(() => { ob.step = 'interests'; drawStart(); }, 200);
+      }));
+    } else if (ob.step === 'interests') {
+      box.innerHTML = shell({ t: 'Select the interests and activities that sound most like you.' },
+        `<h1>What do you love doing?</h1><div class="picks">${D.INTEREST_TILES.map((t) => `<button class="pick ${ob.picks.includes(t.id) ? 'sel' : ''}" data-id="${t.id}"><span>${t.emoji}</span>${esc(t.label)}</button>`).join('')}</div>`,
+        `<small class="muted" id="pick-count"></small><button class="btn big" id="ob-next">Continue →</button>`);
+      const upd = () => { $('#pick-count').textContent = ob.picks.length ? `${ob.picks.length} picked` : 'Pick at least one'; $('#ob-next').disabled = !ob.picks.length; };
+      upd();
+      $$('.pick').forEach((b) => b.addEventListener('click', () => {
+        const id = b.dataset.id;
+        ob.picks = ob.picks.includes(id) ? ob.picks.filter((x) => x !== id) : [...ob.picks, id];
+        b.classList.toggle('sel'); upd();
+      }));
+      $('#ob-next').addEventListener('click', () => { ob.step = 'subjects'; drawStart(); });
+    } else if (ob.step === 'subjects') {
+      box.innerHTML = shell({ t: 'Choose any subjects you enjoy. This step is optional.' },
+        `<h1>Favorite subjects</h1><div class="chips" id="subj">${subjectChips(ob.grade, ob.subjects)}</div>`,
+        `<small class="muted">Optional</small><button class="btn big" id="ob-next">Continue →</button>`);
+      $('#ob-next').addEventListener('click', () => {
+        ob.subjects = $$('#subj input:checked').map((i) => i.value);
+        obSaveProfile(); ob.step = 'quiz'; ob.qi = 0; drawStart();
+      });
+    } else {
+      const q = D.QUESTIONS[ob.qi];
+      const says = { 0: 'Answer based on what you usually enjoy, not what you think you should choose.', 5: 'You are halfway through the assessment.', 10: 'Three questions remaining.', 11: 'This is the final question.' };
+      const say = says[ob.qi] || 'Choose the answer that best describes you.';
+      box.innerHTML = shell({ t: say },
+        `<p class="eyebrow">Question ${ob.qi + 1} of ${OB_QUIZ}</p><div class="statement">${esc(q.q)}</div>
+         <div class="faces">${FACES.map(([e, l], i) => `<button class="face ${ob.answers[ob.qi] === i + 1 ? 'sel' : ''}" data-v="${i + 1}"><span>${e}</span>${l}</button>`).join('')}</div>`);
+      $$('.face').forEach((b) => b.addEventListener('click', () => {
+        ob.answers[ob.qi] = Number(b.dataset.v); b.classList.add('sel');
+        setTimeout(() => { if (ob.qi + 1 < OB_QUIZ) { ob.qi++; drawStart(); } else obFinish(); }, 230);
+      }));
+    }
+    bindBack();
+  }
+
+  function obFinish() {
+    const box = $('#ob');
+    box.innerHTML = `<div class="thinking"><h2>Building your career matches</h2><p class="muted">Comparing your answers, interests, and favorite subjects</p><div class="progress"><div id="think" style="width:0%;transition:width 1.6s ease-out"></div></div></div>`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { const t = $('#think'); if (t) t.style.width = '100%'; }));
+    setTimeout(() => {
+      const first = !S.personality;
+      S.personality = { answers: ob.answers, traits: traitScores(ob.answers), date: today() };
+      if (first) addXP(50, 'Quick start');
+      revealFresh = true;
+      checkBadges(); save();
+      go('#/reveal');
+    }, 1800);
+  }
+
+  // ---------- results: your top match ----------
+  function chooseCareer(id) {
+    if (id === S.careerId) return go('#/today');
+    if (S.careerId && !confirm('Switch career path? Your upcoming schedule will be rebuilt (XP, badges, and skill levels are kept).')) return;
+    S.careerId = id;
+    S.plan = null;
+    if (!S.badges.pathfinder) addXP(50, 'Chose a path');
+    checkBadges();
+    save();
+    if (unplaced().length) { toast("Great choice! First, let's see where you're starting. 🧭"); go('#/skillcheck'); }
+    else { ensureSchedule(); save(); toast(`Your ${esc(career().title)} path is ready! 🗺️`); go('#/today'); }
+  }
+  const bindPick = () => $$('[data-pick]').forEach((b) => b.addEventListener('click', () => chooseCareer(b.dataset.pick)));
+
+  routes.reveal = {
+    html: () => {
+      const tr = S.personality.traits;
+      const top = Object.entries(tr).sort((a, b) => b[1] - a[1]);
+      const matches = matchCareers();
+      const m = matches[0], c = m.c;
+      const mine = S.careerId === c.id;
+      const name = top.slice(0, 2).map(([t]) => D.TRAITS[t].name).join('–');
+      return `
+      <section class="revealpage">
+        <p class="eyebrow">Your results</p>
+        <h1>You're a <span class="grad">${esc(name)}</span></h1>
+        <p class="muted">${esc(D.TRAITS[top[0][0]].desc)} ${esc(D.TRAITS[top[1][0]].desc)}</p>
+        <div class="traits">${top.slice(0, 3).map(([t, v]) => `<div class="trait-row"><span>${D.TRAITS[t].name}</span><div class="bar"><div style="width:${v}%"></div></div><small>${v}%</small></div>`).join('')}</div>
+        <div class="hero-card">
+          <span class="match-badge">${m.score}% match</span>
+          <span class="big-emoji">${c.emoji}</span>
+          <p class="eyebrow">Your #1 match</p>
+          <h2>${esc(c.title)}</h2>
+          <p>${esc(c.summary)}</p>
+          ${m.reasons.length ? `<ul class="reasons">${m.reasons.slice(0, 3).map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}
+          ${facts(c)}
+          <div class="row start"><button class="btn big" data-pick="${c.id}">${mine ? 'Go to my plan →' : 'This is me. Build my path →'}</button><a class="btn ghost big" href="#/career/${c.id}">Learn more</a></div>
+        </div>
+        <h3>Also great for you</h3>
+        <div class="mini-list">${matches.slice(1, 4).map((x) => `<a class="mini-career" href="#/career/${x.c.id}"><span class="emo">${x.c.emoji}</span><div class="grow"><b>${esc(x.c.title)}</b><small>${money(x.c.pay)} · ${x.c.growth == null ? 'Varies' : (x.c.growth > 0 ? '▲' : x.c.growth < 0 ? '▼' : '') + Math.abs(x.c.growth) + '% growth'}</small></div><span class="score">${x.score}%</span></a>`).join('')}</div>
+        <div class="row center"><a class="btn ghost" href="#/explore">Browse all ${D.CAREERS.length} careers</a></div>
+        <div class="row center"><a class="link small" href="#/start?step=quiz">Retake the quiz</a></div>
+      </section>`;
+    },
+    bind: () => {
+      bindPick();
+      if (revealFresh) { revealFresh = false; setTimeout(confetti, 250); }
+    },
+  };
+
+  // ---------- explore: all careers + try-outs ----------
+  routes.explore = {
+    html: (arg, params) => {
+      const tab = params.tab === 'tryouts' ? 'tryouts' : 'careers';
+      const tabs = `<div class="tabs"><a href="#/explore" class="${tab === 'careers' ? 'active' : ''}">Careers</a><a href="#/explore?tab=tryouts" class="${tab === 'tryouts' ? 'active' : ''}">Try-outs</a></div>`;
+      if (tab === 'tryouts') {
+        const { rec, other } = activityLists();
+        const c = career();
+        return `<h1>Explore</h1>${tabs}
+          <p class="muted">Small taste-tests of clubs and activities, about 15–25 minutes each. No grades, no pressure. “Not for me” is a great answer too.</p>
+          <h3>${c ? `Good fits for ${article(c.title)} ${esc(c.title)}` : 'Good fits for your top matches'}</h3><div class="acts">${rec.map(actCard).join('')}</div>
+          <h3>Something different</h3><div class="acts">${other.map(actCard).join('')}</div>`;
+      }
+      const score = Object.fromEntries(matchCareers().map((m) => [m.c.id, m.score]));
+      const list = D.CAREERS.slice().sort((a, b) => score[b.id] - score[a.id]);
+      return `<h1>Explore careers</h1>${tabs}
+        <input class="searchbox" id="cq" type="search" placeholder="Search ${D.CAREERS.length} careers…" aria-label="Search careers">
+        <div class="filters" id="cf">${D.CATEGORIES.map((c, i) => `<button data-cat="${c.id}" class="${i === 0 ? 'on' : ''}">${c.label}</button>`).join('')}</div>
+        <div class="career-list" id="clist">${list.map((c) => `
+          <a class="career-tile ${c.id === S.careerId ? 'chosen' : ''}" data-cat="${c.cat}" data-q="${esc((c.title + ' ' + c.keywords.join(' ')).toLowerCase())}" href="#/career/${c.id}">
+            <div class="top"><span class="emo">${c.emoji}</span><h3>${esc(c.title)}</h3><span class="score">${score[c.id]}%</span></div>
+            <p>${esc(c.summary.split('. ')[0].replace(/\.$/, ''))}.</p>
+            <div class="pill-row"><span class="tag">${money(c.pay)}${c.pay ? '/yr' : ''}</span>${c.growth != null ? `<span class="tag ${c.growth > 0 ? 'accent' : 'warn'}">${c.growth > 0 ? '▲' : c.growth < 0 ? '▼' : ''} ${Math.abs(c.growth)}% growth</span>` : ''}${c.usn ? `<span class="tag">🏅 U.S. News #${c.usn}</span>` : ''}${c.id === S.careerId ? '<span class="tag accent">Your path</span>' : ''}</div>
+          </a>`).join('')}</div>
+        <p class="source">Pay: median annual pay (May 2025). Growth: projected 2025–2035. Source: U.S. Bureau of Labor Statistics, Occupational Outlook Handbook. “U.S. News” = rank in U.S. News &amp; World Report's 2026 Best Jobs. Percent match is Pathfinder's own estimate from your quiz.</p>`;
+    },
+    bind: (arg, params) => {
+      if (params.tab === 'tryouts') return;
+      let cat = 'all', q = '';
+      const apply = () => $$('#clist .career-tile').forEach((t) => { t.hidden = !((cat === 'all' || t.dataset.cat === cat) && (!q || t.dataset.q.includes(q))); });
+      $('#cq').addEventListener('input', (e) => { q = e.target.value.trim().toLowerCase(); apply(); });
+      $$('#cf button').forEach((b) => b.addEventListener('click', () => { cat = b.dataset.cat; $$('#cf button').forEach((x) => x.classList.toggle('on', x === b)); apply(); }));
+    },
+  };
+
+  routes.career = {
+    html: (id) => {
+      const c = D.CAREERS.find((x) => x.id === id);
+      if (!c) return `<p>Career not found.</p><a class="btn" href="#/explore">Back</a>`;
+      const m = matchCareers().find((x) => x.c.id === id);
+      const mine = S.careerId === id;
+      return `
+      <a class="back" href="#/explore">← All careers</a>
+      <div class="detail-hero"><span class="emo">${c.emoji}</span><div><h1>${esc(c.title)}</h1>
+        <div class="pill-row">${m ? `<span class="tag accent">${m.score}% match for you</span>` : ''}${c.usn ? `<span class="tag">🏅 U.S. News #${c.usn} Best Job, 2026</span>` : ''}</div></div></div>
+      <p>${esc(c.summary)}</p>
+      ${facts(c)}
+      ${c.growth != null && c.growth <= 0 ? `<div class="callout">Fewer new openings are projected in this field. Strong, creative people still get hired, so it's worth knowing before you choose.</div>` : ''}
+      <h3>What you'd do</h3><ul class="bullets">${c.does.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      <h3>Skills to build</h3><div class="pill-row" style="margin-bottom:16px">${c.skills.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>
+      ${m && m.reasons.length ? `<h3>Why it fits you</h3><ul class="bullets">${m.reasons.map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}
+      <h3>Education</h3><p>${esc(c.edu || '')}</p>
+      <h3>Competitions to aim for</h3><div class="pill-row">${c.competitions.map((x) => `<span class="tag">🏅 ${esc(x)}</span>`).join('')}</div>
+      <div class="sticky-cta"><button class="btn big block" data-pick="${c.id}">${mine ? 'This is your path ✓' : 'Choose this path'}</button></div>
+      <p class="source">Pay and growth: U.S. Bureau of Labor Statistics (median pay, May 2025; projected growth 2025–35). Ranking: U.S. News &amp; World Report 2026 Best Jobs.</p>`;
+    },
+    bind: bindPick,
+  };
+
+  // ---------- edit profile ----------
   routes.profile = {
     html: () => {
-      const p = S.profile || { subjects: [], dailyMinutes: 45, grade: '9' };
+      const p = S.profile;
       return `
-      <section class="card narrow">
-        <h2>🙋 About me</h2>
-        <p class="muted">This helps Pathfinder recommend careers and build a plan that fits your grade.</p>
-        <form id="profile-form" class="form">
-          <label>First name<input name="name" required maxlength="40" value="${esc(p.name)}" placeholder="e.g. Maya"></label>
-          <label>Grade
-            <select name="grade">${[6, 7, 8, 9, 10, 11, 12].map((g) => `<option value="${g}" ${String(p.grade) === String(g) ? 'selected' : ''}>Grade ${g}</option>`).join('')}</select>
-          </label>
-          <label class="full">Hobbies <small>(comma separated)</small><input name="hobbies" value="${esc(p.hobbies)}" placeholder="e.g. chess, drawing, soccer, video games"></label>
-          <label class="full">Interests <small>(topics you love learning about)</small><input name="interests" value="${esc(p.interests)}" placeholder="e.g. space, animals, AI, business"></label>
-          <fieldset class="full"><legend>Favorite subjects</legend>
-            <div class="chips" id="subject-chips">${subjectChips(p.grade, p.subjects)}</div>
-            <small class="muted">These change with your grade.</small>
-          </fieldset>
-          <label class="full">Future goals & dreams<textarea name="aspirations" rows="3" placeholder="What do you want to do or become someday? Anything goes!">${esc(p.aspirations)}</textarea></label>
-          <label class="full">How much time can you spend on your path each day?
-            <select name="dailyMinutes">${[30, 45, 60, 90].map((m) => `<option value="${m}" ${Number(p.dailyMinutes) === m ? 'selected' : ''}>${m} minutes</option>`).join('')}</select>
-          </label>
-          <div class="full actions"><button class="btn big" type="submit">${S.profile ? 'Save changes' : 'Next: Personality test →'}</button></div>
-        </form>
-      </section>`;
+      <h1>About me</h1>
+      <form id="profile-form" class="form card">
+        <label>Name<input name="name" required maxlength="40" value="${esc(p.name)}"></label>
+        <label>Grade<select name="grade">${[6, 7, 8, 9, 10, 11, 12].map((g) => `<option value="${g}" ${String(p.grade) === String(g) ? 'selected' : ''}>Grade ${g}</option>`).join('')}</select></label>
+        <fieldset><legend>Favorite subjects</legend><div class="chips" id="subject-chips">${subjectChips(p.grade, p.subjects)}</div></fieldset>
+        <label>Your dream (optional)<textarea name="aspirations" rows="3" placeholder="What do you want to do or become someday?">${esc(p.aspirations)}</textarea></label>
+        <label>Time per day for Pathfinder
+          <select name="dailyMinutes">${[30, 45, 60, 90].map((m) => `<option value="${m}" ${Number(p.dailyMinutes) === m ? 'selected' : ''}>${m} minutes</option>`).join('')}</select></label>
+        <div class="row"><a class="link" href="#/rewards">Cancel</a><button class="btn" type="submit">Save</button></div>
+      </form>`;
     },
     bind: () => {
       const form = $('#profile-form');
@@ -420,116 +656,12 @@
         const keep = $$('input[name=subjects]:checked', form).map((i) => i.value);
         $('#subject-chips').innerHTML = subjectChips(form.grade.value, keep);
       });
-      $('#profile-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        const first = !S.profile;
-        S.profile = {
-          name: fd.get('name').trim(), grade: fd.get('grade'), hobbies: fd.get('hobbies').trim(),
-          interests: fd.get('interests').trim(), subjects: fd.getAll('subjects'),
-          aspirations: fd.get('aspirations').trim(), dailyMinutes: Number(fd.get('dailyMinutes')),
-        };
-        save();
-        toast(first ? `Nice to meet you, ${esc(S.profile.name)}! 👋` : 'Profile saved');
-        go(first || !S.personality ? '#/test' : '#/careers');
-      });
-    },
-  };
-
-  routes.test = {
-    html: () => {
-      const ans = (S.personality && S.personality.answers) || {};
-      const scale = ['Not me', 'A little', 'Sometimes', 'Mostly', 'Totally me'];
-      return `
-      <section class="card narrow">
-        <h2>🧠 Personality test</h2>
-        <p class="muted">There are no right or wrong answers. Go with your first instinct.</p>
-        <div class="progress"><div id="test-bar" style="width:0%"></div></div>
-        <form id="test-form">
-          ${D.QUESTIONS.map((q, i) => `
-            <div class="likert" data-i="${i}">
-              <p><span class="qn">${i + 1}.</span> ${esc(q.q)}</p>
-              <div class="scale">${scale.map((l, v) => `<label><input type="radio" name="q${i}" value="${v + 1}" ${ans[i] === v + 1 ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
-            </div>`).join('')}
-          <div class="actions"><button class="btn big" type="submit">See my results →</button></div>
-        </form>
-      </section>`;
-    },
-    bind: () => {
-      const form = $('#test-form');
-      const update = () => {
-        const n = D.QUESTIONS.filter((_, i) => form[`q${i}`].value).length;
-        $('#test-bar').style.width = (n / D.QUESTIONS.length) * 100 + '%';
-      };
-      form.addEventListener('change', update);
-      update();
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        const answers = {};
-        const missing = [];
-        D.QUESTIONS.forEach((_, i) => { const v = form[`q${i}`].value; if (v) answers[i] = Number(v); else missing.push(i); });
-        if (missing.length) {
-          toast(`Please answer all questions (${missing.length} left)`, 'warn');
-          $(`.likert[data-i="${missing[0]}"]`).scrollIntoView({ behavior: 'smooth', block: 'center' });
-          return;
-        }
-        S.personality = { answers, traits: traitScores(answers), date: today() };
-        if (!S.badges.explorer) addXP(50, 'Personality test');
-        checkBadges();
-        save();
-        go('#/careers');
+        const fd = new FormData(form);
+        Object.assign(S.profile, { name: fd.get('name').trim(), grade: fd.get('grade'), subjects: fd.getAll('subjects'), aspirations: fd.get('aspirations').trim(), dailyMinutes: Number(fd.get('dailyMinutes')) });
+        save(); toast('Saved ✓'); go('#/rewards');
       });
-    },
-  };
-
-  function traitBars(traits) {
-    return Object.entries(traits).sort((a, b) => b[1] - a[1]).map(([t, v]) => `
-      <div class="trait"><div class="trait-head"><b>${D.TRAITS[t].name}</b><span>${v}%</span></div>
-      <div class="bar"><div style="width:${v}%"></div></div><small class="muted">${D.TRAITS[t].desc}</small></div>`).join('');
-  }
-
-  routes.careers = {
-    html: () => {
-      const tr = S.personality.traits;
-      const top = Object.entries(tr).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t]) => D.TRAITS[t].name);
-      const matches = matchCareers();
-      const card = (m, i) => `
-        <article class="career ${m.c.id === S.careerId ? 'selected' : ''}">
-          <div class="career-top"><span class="career-emoji">${m.c.emoji}</span>
-            <div><h3>${esc(m.c.title)}</h3><p class="muted">${esc(m.c.summary)}</p></div>
-            <span class="match ${i < 3 ? 'hot' : ''}">${m.score}%</span></div>
-          ${m.reasons.length ? `<ul class="reasons">${m.reasons.map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}
-          <p class="skills"><b>Key skills:</b> ${m.c.skills.map(esc).join(' · ')}</p>
-          <button class="btn ${m.c.id === S.careerId ? 'ghost' : ''}" data-pick="${m.c.id}">${m.c.id === S.careerId ? '✓ Your path' : 'Choose this path'}</button>
-        </article>`;
-      return `
-      <section class="grid-2">
-        <div class="card">
-          <h2>Your personality: <span class="grad">The ${top.join('-')}</span></h2>
-          ${traitBars(tr)}
-          <a href="#/test" class="link">Retake test</a>
-        </div>
-        <div class="card">
-          <h2>💼 Your top career matches</h2>
-          <p class="muted">Based on your personality, hobbies, interests, favorite subjects, and goals. Pick one to build your path (you can switch later).</p>
-          <div class="careers">${matches.slice(0, 5).map(card).join('')}</div>
-          <details><summary>See all ${matches.length} careers</summary><div class="careers">${matches.slice(5).map((m, i) => card(m, i + 5)).join('')}</div></details>
-        </div>
-      </section>`;
-    },
-    bind: () => {
-      $$('[data-pick]').forEach((b) => b.addEventListener('click', () => {
-        const id = b.dataset.pick;
-        if (id === S.careerId) return go('#/schedule');
-        if (S.careerId && !confirm('Switch career path? Your upcoming schedule will be rebuilt (XP, badges, and skill levels are kept).')) return;
-        S.careerId = id;
-        S.plan = null;
-        if (!S.badges.pathfinder) addXP(50, 'Chose a path');
-        checkBadges();
-        save();
-        if (unplaced().length) { toast("Great choice! First, let's see where you're starting. 🧭"); go('#/skillcheck'); }
-        else { ensureSchedule(); save(); toast(`Your ${esc(career().title)} path is ready! 🗺️`); go('#/schedule'); }
-      }));
     },
   };
 
@@ -634,56 +766,74 @@
     });
   }
 
+  const wasActive = (d) => !!(S.activity[d] || S.rest[d]);
+  function activitySummary() {
+    const t = today();
+    const start = S.plan ? S.plan.start : t;
+    const daysTracked = Math.max(1, Math.min(7, daysBetween(start, t) + 1));
+    let daysAccounted = 0;
+    for (let i = 0; i < daysTracked; i++) if (wasActive(addDays(t, -i))) daysAccounted++;
+    const activeToday = !!S.activity[t];
+    const resting = !!S.rest[t] && !activeToday;
+    let canRest = !activeToday && !S.rest[t];
+    for (let i = 1; i <= 6; i++) if (S.rest[addDays(t, -i)]) canRest = false;
+    return { daysTracked, daysAccounted, activeToday, resting, canRest };
+  }
+  function progressStrip() {
+    const summary = activitySummary();
+    const restControl = summary.resting
+      ? '<span class="tag">Rest day scheduled</span>'
+      : summary.canRest ? '<button class="link" id="rest-day">Schedule a rest day</button>' : '';
+    return `<section class="weekly-summary">
+      <div class="weekly-summary-copy"><b>Weekly progress</b><small>${summary.daysAccounted} of ${summary.daysTracked} days accounted for</small></div>
+      <div class="bar"><div style="width:${Math.round(summary.daysAccounted / summary.daysTracked * 100)}%"></div></div>
+      <div class="weekly-summary-meta"><span>${streak()} day streak</span>${restControl}</div>
+    </section>`;
+  }
+  function stepSub(t) {
+    const m = t.minutes;
+    return { lesson: `📖 Short lesson + quick check · ~${m} min`, code: `🐍 Real Python, checked by tests · ~${m} min`,
+      practice: `📝 ${t.n || 5} questions at Level ${skill(t.domain).level} · ~${m} min`, reflect: `💭 ${t.prompt || ''}`,
+      milestone: `🎖️ A real-world step · ~${m} min`, focus: `⏱️ Focus session · ~${m} min` }[t.type];
+  }
+  function stepsHTML(day) {
+    let found = false;
+    return day.tasks.map((t, i) => {
+      const locked = lockedByLesson(t, day);
+      const done = t.status === 'done';
+      const state = done ? 'done' : (!found && !locked) ? (found = true, 'now') : 'later';
+      return `<li class="step ${state}"><span class="num">${done ? '✓' : i + 1}</span>
+        <div class="info"><b>${esc(t.title)}</b><small>${esc(stepSub(t))}</small>${verifiedLabel(t)}</div>
+        ${state === 'now' ? `<span class="go">${startAction(t, day).replace('btn small', 'btn')}</span>` : state === 'later' ? `<span class="muted small">${locked ? '🔒 After the lesson' : 'Up next'}</span>` : ''}
+        <div class="inline-form" id="form-${t.id}"></div></li>`;
+    }).join('');
+  }
+
   routes.today = {
     html: () => {
       const c = career();
       const t = today();
       const day = S.plan.days[t];
-      const pct = Math.round(dayCompletion(day) * 100);
-      const st = stamina();
-      const nextBadge = D.BADGES.find((b) => !S.badges[b.id]);
-      const lv = level(), into = S.xp % 250;
+      const left = day.tasks.filter((x) => x.status !== 'done').length;
       const hour = new Date().getHours();
       const hello = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+      const lv = level(), into = S.xp % 250;
       return `
-      <section class="today-head">
-        <div><h1>${hello}, ${esc(S.profile.name)}! ${c.emoji}</h1>
-        <p class="muted">Day ${daysBetween(S.plan.start, t) + 1} on your path to becoming a <b>${esc(c.title)}</b>.</p></div>
-        <div class="ring" style="--p:${pct}"><span>${pct}%</span><small>today</small></div>
-      </section>
-      ${pandaCard(day)}
-      <section class="grid-2 wide-left">
-        <div class="card">
-          <h2>Today's plan · ${prettyDate(t)}</h2>
-          <p class="adapt">🧬 ${esc(st.note)}</p>
-          <ul class="tasks">${day.tasks.map((x) => taskRow(x, t)).join('')}</ul>
-          <a href="#/schedule" class="link">Edit my schedule →</a>
-        </div>
-        <div class="stack">
-          <div class="card stat-card">
-            <div class="stat"><b>Lv ${lv}</b><small>${levelTitle(lv)}</small></div>
-            <div class="bar xp"><div style="width:${(into / 250) * 100}%"></div></div>
-            <small class="muted">${250 - into} XP to Level ${lv + 1}</small>
-            <div class="stats-row">
-              <div><b>🔥 ${streak()}</b><small>day streak</small></div>
-              <div><b>🛡️ ${S.integrity.score}</b><small>integrity</small></div>
-              <div><b>🪙 ${S.coins}</b><small>coins</small></div>
-            </div>
-          </div>
-          <div class="card">
-            <h3>Skill levels</h3>
-            ${c.domains.map((d) => { const s = skill(d); return `<div class="skill"><span>${D.DOMAINS[d].emoji} ${D.DOMAINS[d].name}<small class="muted"> ${isPlaced(d) ? levelName(s.level) : '· placement quiz first'}</small></span><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= s.level ? 'on' : ''}"></i>`).join('')}</span></div>`; }).join('')}
-            <small class="muted">Your first quiz in each subject sets your starting level. Score 80%+ to level up. Level 5 = competition level.</small>
-          </div>
-          ${suggestTry()}
-          ${nextBadge ? `<div class="card next-badge"><span>${nextBadge.emoji}</span><div><small class="muted">Next badge</small><b>${esc(nextBadge.name)}</b><small>${esc(nextBadge.desc)}</small></div></div>` : ''}
-        </div>
-      </section>`;
+      <div class="today-head"><p class="eyebrow">Day ${daysBetween(S.plan.start, t) + 1} · becoming ${article(c.title)} ${esc(c.title)} ${c.emoji}</p><h1>${hello}, ${esc(S.profile.name)}</h1></div>
+      ${progressStrip()}
+      ${left ? `<h2>Today's steps <small class="muted">${day.tasks.length - left} of ${day.tasks.length} done</small></h2>` : ''}
+      ${left ? `<ol class="steps">${stepsHTML(day)}</ol>` : `
+        <div class="card done-card"><h2>Today's plan is complete</h2><p class="muted">Your work is recorded. Continue tomorrow, or use the options below to keep building your skills.</p>
+          <div class="row center"><a class="btn ghost" href="#/practice">Do extra practice</a><a class="btn ghost" href="#/explore?tab=tryouts">Try a new activity</a></div></div>
+        <ol class="steps">${stepsHTML(day)}</ol>`}
+      <div class="xp-line"><span>Level ${lv}</span><div class="bar"><div style="width:${(into / 250) * 100}%"></div></div><span>${S.xp} XP</span></div>
+      <p class="adapt">🧬 ${esc(stamina().note)} <a href="#/schedule?tab=schedule">Edit my schedule</a></p>
+      ${suggestTry()}`;
     },
     bind: () => {
       bindTaskActions();
       const rb = $('#rest-day');
-      if (rb) rb.addEventListener('click', () => { S.rest[today()] = true; save(); toast(`😴 ${esc(pandaName())} is taking a nap with you. Rest well!`); render(); });
+      if (rb) rb.addEventListener('click', () => { S.rest[today()] = true; save(); toast('Rest day scheduled. Your progress is saved.'); render(); });
     },
   };
 
@@ -692,38 +842,28 @@
       const c = career();
       const t = today();
       const stage = gradeStage(S.profile.grade);
-      const tab = params.tab || 'daily';
+      const tab = ['schedule', 'daily'].includes(params.tab) ? 'schedule' : 'roadmap';
+      const more = params.more === '1';
       const days = [];
-      for (let i = -3; i <= 13; i++) { const d = addDays(t, i); if (S.plan.days[d]) days.push(d); }
+      for (let i = more ? -3 : -1; i <= (more ? 13 : 6); i++) { const d = addDays(t, i); if (S.plan.days[d]) days.push(d); }
       return `
-      <section class="card">
-        <div class="path-head">
-          <span class="career-emoji big">${c.emoji}</span>
-          <div><h1>My path: ${esc(c.title)}</h1><p class="muted">${esc(c.summary)}</p></div>
-          <a class="btn ghost small" href="#/careers">Change career</a>
-        </div>
-        <div class="tabs">
-          <a href="#/schedule?tab=daily" class="${tab === 'daily' ? 'active' : ''}">📅 Daily schedule</a>
-          <a href="#/schedule?tab=roadmap" class="${tab === 'roadmap' ? 'active' : ''}">🗺️ Grade-by-grade roadmap</a>
-        </div>
-      </section>
+      <div class="path-head"><span class="emo">${c.emoji}</span><div><p class="eyebrow">My path</p><h1>${esc(c.title)}</h1></div><a class="btn ghost small" href="#/explore">Change career</a></div>
+      ${facts(c)}
+      <div class="tabs"><a href="#/schedule" class="${tab === 'roadmap' ? 'active' : ''}">Roadmap</a><a href="#/schedule?tab=schedule" class="${tab === 'schedule' ? 'active' : ''}">Schedule</a></div>
       ${tab === 'roadmap' ? `
-      <section class="card">
-        <h2>What a future ${esc(c.title)} needs</h2>
-        <div class="chips static">${c.skills.map((s) => `<span class="chip on">${esc(s)}</span>`).join('')}</div>
+        <h2>From now to ${article(c.title)} ${esc(c.title)}</h2>
         <ol class="timeline">${D.STAGES.map((s) => `
           <li class="${s.key === stage ? 'now' : ''}"><div class="dot"></div><div>
-            <h3>${s.label}${s.key === stage ? ' <span class="tag">You are here</span>' : ''}</h3>
+            <h3>${s.label}${s.key === stage ? ' <span class="tag accent">You are here</span>' : ''}</h3>
             <ul>${c.path[s.key].map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div></li>`).join('')}
         </ol>
-        <h2>🏅 Competitions & olympiads to aim for</h2>
+        <h2>Competitions to aim for</h2>
         <ul class="comp">${c.competitions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-        <p class="muted small">Ask your school counselor which of these your school offers. Many are free or low cost.</p>
-      </section>` : `
-      <section class="card">
-        <p class="muted">Your plan adapts as you go: if you keep completing tasks and scoring well, days get longer and harder. If you fall behind, they get lighter. Edit anything you like. Edited days stay exactly as you set them.</p>
+        <p class="muted small" style="margin-top:12px">Ask your school counselor which of these your school offers. Many are free or low cost.</p>`
+      : `
+        <p class="muted">Your plan adapts: do well and days get a bit longer; fall behind and they get lighter. Edit anything, and edited days stay exactly as you set them.</p>
         <div class="days">${days.map((d) => dayCard(d)).join('')}</div>
-      </section>`}`;
+        <div class="row center"><a class="link" href="#/schedule?tab=schedule${more ? '' : '&more=1'}">${more ? 'Show fewer days' : 'Show more days'}</a></div>`}`;
     },
     bind: () => {
       bindTaskActions();
@@ -792,7 +932,7 @@
     box.innerHTML = taskForm(f.task);
     bindTaskForm(box, (v) => {
       Object.assign(f.task, v);
-      if (v.type === 'reflect' && !f.task.prompt) f.task.prompt = D.REFLECT_PROMPTS[0].replace(/\{career\}/g, career().title);
+      if (v.type === 'reflect' && !f.task.prompt) f.task.prompt = fillCareer(D.REFLECT_PROMPTS[0], career().title);
       f.day.edited = true; save(); render();
     });
   }
@@ -820,13 +960,11 @@
         const others = Object.keys(D.DOMAINS).filter((d) => !c.domains.includes(d));
         const tile = (d) => { const s = skill(d); return `<a class="tile" href="#/practice/${d}"><span>${D.DOMAINS[d].emoji}</span><b>${D.DOMAINS[d].name}</b><small>${isPlaced(d) ? `Level ${s.level} · ${levelName(s.level)}` : 'Take placement quiz'}</small></a>`; };
         return `
-        <section class="card">
-          <h2>📝 Practice</h2>
-          <p class="muted">Your first set in each subject is a short placement quiz that finds your starting level. After that, every set is 5 questions at your level: score 80%+ to level up; under 40% and we'll ease back. Free practice earns XP too.</p>
-          <h3>For your ${esc(c.title)} path</h3><div class="tiles">${c.domains.map(tile).join('')}</div>
-          ${c.domains.includes('coding') ? `<h3>🐍 Code Lab</h3><p class="muted">Write real Python for your ${esc(c.title)} job. Your code runs against tests, so you know it works.</p><a class="btn" href="#/code">Open Code Lab</a>` : ''}
-          <h3>Explore other subjects</h3><div class="tiles">${others.map(tile).join('')}</div>
-        </section>`;
+        <h1>Practice</h1>
+        <p class="muted">Short sets at your level. Score 80%+ to level up. Free practice earns XP too.</p>
+        <h3>For ${article(c.title)} ${esc(c.title)}</h3><div class="tiles">${c.domains.filter((d) => d !== 'coding').map(tile).join('')}</div>
+        ${c.domains.includes('coding') ? `<h3>🐍 Python</h3><div class="tiles">${tile('coding')}<a class="tile" href="#/code"><span>⌨️</span><b>Code Lab</b><small>Real Python, checked by tests</small></a></div>` : ''}
+        <details class="fold"><summary>Other subjects</summary><div class="tiles">${others.map(tile).join('')}</div></details>`;
       }
       const s = skill(domain);
       if (!isPlaced(domain)) { quiz = null; pl = newPlacement([domain], 'single', params.task); }
@@ -964,45 +1102,35 @@
     },
   };
 
-  // ---------- rewards ----------
+  // ---------- me (progress, badges, prizes, settings) ----------
   routes.rewards = {
     html: () => {
-      const lv = level();
+      const lv = level(), into = S.xp % 250;
+      const c = S.careerId ? career() : null;
       return `
-      <section class="grid-2">
-        <div class="card">
-          <h2>🏆 Badges <small class="muted">${Object.keys(S.badges).length} / ${D.BADGES.length}</small></h2>
-          <div class="badges">${D.BADGES.map((b) => `
-            <div class="badge ${S.badges[b.id] ? 'got' : ''}" title="${esc(b.desc)}"><span>${b.emoji}</span><b>${esc(b.name)}</b><small>${S.badges[b.id] ? 'Earned ' + prettyDate(S.badges[b.id]) : esc(b.desc)}</small></div>`).join('')}
-          </div>
-          <h2>⭐ Level ${lv}: ${levelTitle(lv)}</h2>
-          <div class="levels">${D.LEVEL_TITLES.map((t, i) => `<span class="${i + 1 <= lv ? 'on' : ''}">${i + 1}. ${t}</span>`).join('')}</div>
-        </div>
-        <div class="stack">
-          <div class="card">
-            <h2>🎁 Prize shop <small class="muted">🪙 ${S.coins} coins</small></h2>
-            <p class="muted small">Earn 1 coin for every 10 XP. Ask a parent or teacher to set up real prizes here, then redeem them with your coins.</p>
-            <ul class="shop">${S.rewards.map((r) => `
-              <li class="${r.redeemed ? 'done' : ''}"><span>${esc(r.name)}</span><b>🪙 ${r.cost}</b>
-                ${r.redeemed ? `<small class="ok">Redeemed ${prettyDate(r.redeemed)}</small>` : `<button class="btn small" data-redeem="${r.id}" ${S.coins < r.cost ? 'disabled' : ''}>Redeem</button>`}
-                <button class="icon" data-rmreward="${r.id}" title="Remove">✕</button></li>`).join('')}</ul>
-            <form id="reward-form" class="row"><input name="name" placeholder="New prize, e.g. New book" required maxlength="60"><input name="cost" type="number" min="10" step="10" value="100" style="width:90px"><button class="btn small">Add</button></form>
-          </div>
-          <div class="card">
-            <h2>🛡️ Integrity tracker <small class="muted">${S.integrity.score}/100</small></h2>
-            <div class="bar ${S.integrity.score < 80 ? 'low' : ''}"><div style="width:${S.integrity.score}%"></div></div>
-            <p class="muted small">Pathfinder checks your work so progress is real: quizzes are auto-graded and timed, focus timers pause when you leave the tab,
-            and reflections are checked for copy-paste, gibberish, and repeats. Honest work raises your score. Below 80, XP is reduced.</p>
-            <ul class="log">${S.integrity.log.slice(0, 8).map((l) => `<li><span class="${l.delta < 0 ? 'bad' : 'ok'}">${l.delta > 0 ? '+' : ''}${l.delta}</span> ${esc(l.msg)} <small class="muted">${prettyDate(l.date)}</small></li>`).join('') || '<li class="muted small">No events yet. Keep it clean! ✨</li>'}</ul>
-          </div>
-          <div class="card">
-            <h3>⚙️ Settings</h3>
-            <label class="field-inline">Your panda's name <input id="panda-name" maxlength="14" value="${esc(pandaName())}"></label>
-            <label class="toggle"><input type="checkbox" id="demo" ${S.settings.demo ? 'checked' : ''}> Demo mode (focus timers run 60× faster, for trying the app)</label>
-            <div class="row"><a href="#/profile" class="link">Edit profile</a><button class="link danger" id="reset">Reset all data</button></div>
-          </div>
-        </div>
-      </section>`;
+      <div class="me-head"><div><h1>${esc(S.profile.name)}</h1><p class="muted" style="margin:0">Level ${lv} · ${levelTitle(lv)}${c ? ` · future ${esc(c.title)}` : ''}</p></div></div>
+      <div class="bar"><div style="width:${(into / 250) * 100}%"></div></div><small class="muted">${250 - into} XP to Level ${lv + 1}</small>
+      <div class="statgrid"><div><b>${streak()}</b><small>day streak</small></div><div><b>${S.xp}</b><small>total XP</small></div><div><b>${S.coins}</b><small>coins</small></div></div>
+      ${c ? `<div class="card"><h3>Your skills</h3>${c.domains.map((d) => { const s = skill(d); return `<div class="skill"><span>${D.DOMAINS[d].emoji} ${D.DOMAINS[d].name}<small class="muted"> ${isPlaced(d) ? levelName(s.level) : ''}</small></span><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= s.level ? 'on' : ''}"></i>`).join('')}</span></div>`; }).join('')}</div>` : ''}
+      <h2>Badges <small class="muted">${Object.keys(S.badges).length} of ${D.BADGES.length}</small></h2>
+      <div class="badges" style="margin-bottom:28px">${D.BADGES.map((b) => `
+        <div class="badge ${S.badges[b.id] ? 'got' : ''}" title="${esc(b.desc)}"><span>${b.emoji}</span><b>${esc(b.name)}</b><small>${S.badges[b.id] ? 'Earned ' + prettyDate(S.badges[b.id]) : esc(b.desc)}</small></div>`).join('')}</div>
+      <div class="card">
+        <h2>🎁 Prize shop <small class="muted">🪙 ${S.coins}</small></h2>
+        <p class="muted small">Earn 1 coin for every 10 XP. A parent or teacher can add real prizes here.</p>
+        <ul class="shop">${S.rewards.map((r) => `
+          <li class="${r.redeemed ? 'done' : ''}"><span>${esc(r.name)}</span><b>🪙 ${r.cost}</b>
+            ${r.redeemed ? `<small class="ok">Redeemed ${prettyDate(r.redeemed)}</small>` : `<button class="btn small" data-redeem="${r.id}" ${S.coins < r.cost ? 'disabled' : ''}>Redeem</button>`}
+            <button class="icon" data-rmreward="${r.id}" title="Remove">✕</button></li>`).join('')}</ul>
+        <form id="reward-form" class="row"><input name="name" placeholder="New prize, e.g. New book" required maxlength="60"><input name="cost" type="number" min="10" step="10" value="100" style="width:90px"><button class="btn small">Add</button></form>
+      </div>
+      <details class="fold"><summary>🛡️ Integrity score · ${S.integrity.score}/100</summary><div>
+        <div class="bar ${S.integrity.score < 80 ? 'low' : ''}"><div style="width:${S.integrity.score}%"></div></div>
+        <p class="muted small" style="margin-top:10px">Pathfinder checks that progress is real: quizzes are timed, focus timers pause when you leave the tab, reflections are checked for copy-paste and gibberish, and pasted code is flagged. Honest work raises your score. Below 80, XP is reduced.</p>
+        <ul class="log">${S.integrity.log.slice(0, 8).map((l) => `<li><span class="${l.delta < 0 ? 'bad' : 'ok'}">${l.delta > 0 ? '+' : ''}${l.delta}</span> ${esc(l.msg)} <small class="muted">${prettyDate(l.date)}</small></li>`).join('') || '<li class="muted small">No events yet. Keep it clean! ✨</li>'}</ul></div></details>
+      <details class="fold"><summary>⚙️ Settings</summary><div>
+        <label class="toggle"><input type="checkbox" id="demo" ${S.settings.demo ? 'checked' : ''}> Demo mode (focus timers run 60× faster, for trying the app)</label>
+        <div class="row start" style="gap:18px"><a href="#/profile" class="link">Edit my profile</a><a href="#/start?step=quiz" class="link">Retake the quiz</a><button class="link danger" id="reset">Reset all data</button></div></div></details>`;
     },
     bind: () => {
       $$('[data-redeem]').forEach((b) => b.addEventListener('click', () => {
@@ -1016,93 +1144,13 @@
         S.rewards.push({ id: uid(), name: e.target.name.value.trim(), cost: Math.max(10, Number(e.target.cost.value) || 100) });
         save(); render();
       });
-      $('#panda-name').addEventListener('change', (e) => { S.settings.pandaName = e.target.value.trim() || 'Bao'; save(); renderNav('rewards'); });
       $('#demo').addEventListener('change', (e) => { S.settings.demo = e.target.checked; save(); });
       $('#reset').addEventListener('click', () => {
         if (!confirm('Erase all Pathfinder data on this device? This cannot be undone.')) return;
-        S = blank(); save(); go('#/welcome'); render();
+        S = blank(); save(); location.hash = '#/welcome'; render();
       });
     },
   };
-
-
-  // ---------- the panda (study buddy) ----------
-  const wasActive = (d) => !!(S.activity[d] || S.rest[d]);
-  function pandaState() {
-    const t = today();
-    const start = S.plan ? S.plan.start : t;
-    let missed = 0;
-    for (let d = addDays(t, -1); d >= start && !wasActive(d); d = addDays(d, -1)) missed++;
-    const activeToday = !!S.activity[t];
-    const resting = !!S.rest[t] && !activeToday;
-    const day = S.plan && S.plan.days[t];
-    const comp = day ? dayCompletion(day) : 0;
-    let mood;
-    if (resting) mood = 'sleepy';
-    else if (activeToday) mood = comp >= 0.5 || !day ? 'happy' : 'content';
-    else mood = missed === 0 ? 'waiting' : missed === 1 ? 'sleepy' : 'sad';
-    const denom = Math.max(1, Math.min(7, daysBetween(start, t) + 1));
-    let act = 0;
-    for (let i = 0; i < denom; i++) if (wasActive(addDays(t, -i))) act++;
-    const value = denom === 1 && !wasActive(t) ? 60 : Math.round((act / denom) * 100);
-    let canRest = !activeToday && !S.rest[t];
-    for (let i = 1; i <= 6; i++) if (S.rest[addDays(t, -i)]) canRest = false;
-    return { mood, missed, resting, value, canRest };
-  }
-
-  function pandaSVG(mood, size) {
-    const ink = '#1d1b2e';
-    const open = (x, dy) => `<circle cx="${x}" cy="${57 + dy}" r="5" fill="#fff"/><circle cx="${x + 1}" cy="${58 + dy}" r="2.6" fill="${ink}"/>`;
-    const arcs = (up) => `<path d="${up ? 'M36 58q6-8 12 0M72 58q6-8 12 0' : 'M36 56q6 7 12 0M72 56q6 7 12 0'}" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
-    const eyes = { happy: arcs(true), sleepy: arcs(false), sad: open(43, 3) + open(77, 3), content: open(43, 0) + open(77, 0), waiting: open(43, 0) + open(77, 0) }[mood];
-    const mouth = {
-      happy: `<path d="M47 79q13 17 26 0z" fill="#ff6b8e" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/>`,
-      content: `<path d="M50 80q10 8 20 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
-      waiting: `<path d="M51 81q9 4 18 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
-      sleepy: `<ellipse cx="60" cy="83" rx="4" ry="3" fill="none" stroke="${ink}" stroke-width="2.5"/>`,
-      sad: `<path d="M50 87q10-9 20 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
-    }[mood];
-    const extra = {
-      happy: `<circle cx="30" cy="76" r="5.5" fill="#ff8fab" opacity=".5"/><circle cx="90" cy="76" r="5.5" fill="#ff8fab" opacity=".5"/><path d="M106 70l2.2 5.5 5.5 2.2-5.5 2.2-2.2 5.5-2.2-5.5-5.5-2.2 5.5-2.2z" fill="#ffb020"/>`,
-      sleepy: `<text x="98" y="30" font-size="17" font-weight="800" fill="#8a7cff" font-family="Nunito,sans-serif">z</text><text x="106" y="16" font-size="12" font-weight="800" fill="#8a7cff" font-family="Nunito,sans-serif">z</text>`,
-      sad: `<path d="M33 48l16-6M87 48l-16-6" stroke="${ink}" stroke-width="3" stroke-linecap="round"/><path d="M50 69q-4.5 6 0 9.5q4.5-3.5 0-9.5z" fill="#5bbcff"/>`,
-      content: '', waiting: '',
-    }[mood];
-    const label = { happy: 'happy', content: 'munching bamboo', waiting: 'ready to study', sleepy: 'sleepy', sad: 'missing you' }[mood];
-    return `<svg class="panda panda-${mood}" viewBox="0 0 120 120" width="${size}" height="${size}" role="img" aria-label="${esc(pandaName())} the panda is ${label}">
-      <circle cx="29" cy="31" r="14" fill="${ink}"/><circle cx="91" cy="31" r="14" fill="${ink}"/>
-      <circle cx="60" cy="64" r="42" fill="#fff" stroke="${ink}" stroke-width="3"/>
-      <ellipse cx="42" cy="58" rx="10.5" ry="13.5" transform="rotate(-18 42 58)" fill="${ink}"/>
-      <ellipse cx="78" cy="58" rx="10.5" ry="13.5" transform="rotate(18 78 58)" fill="${ink}"/>
-      ${eyes}<ellipse cx="60" cy="72" rx="6.5" ry="4.5" fill="${ink}"/>${mouth}${extra}</svg>`;
-  }
-
-  function pandaMessage(st) {
-    const n = pandaName();
-    const pick = (arr) => arr[new Date().getDate() % arr.length];
-    if (st.mood === 'happy') return pick([`${n} is dancing with joy! Great work today. 🎋`, `${n} loves that you showed up today.`, `Bamboo party! ${n} is so proud of you.`]);
-    if (st.mood === 'content') return `${n} is happily munching bamboo. Do a bit more whenever you're ready!`;
-    if (st.mood === 'waiting') return S.plan && daysBetween(S.plan.start, today()) === 0 ? `${n} is excited to meet you! Try one small task to say hi.` : `${n} is ready to study with you. Even 10 minutes makes ${n} happy!`;
-    if (st.mood === 'sleepy') return st.resting ? `${n} is napping with you today. Rest is part of learning. See you tomorrow! 💤` : `${n} got a little sleepy yesterday. One small task will wake them right up. 💤`;
-    return `${n} misses you! No worries, everyone has busy days. One small task and ${n} perks right up. 🎋`;
-  }
-
-  function pandaCard(day) {
-    const st = pandaState();
-    const n = esc(pandaName());
-    return `
-      <section class="card panda-card mood-${st.mood}">
-        <div class="panda-art">${pandaSVG(st.mood, 116)}</div>
-        <div class="panda-talk">
-          <div class="bubble">${esc(pandaMessage(st))}</div>
-          <div class="panda-meta">
-            <div class="grow"><small class="muted">${n}'s happiness · ${st.value}%</small><div class="bar ${st.value < 40 ? 'low' : ''}"><div style="width:${st.value}%"></div></div></div>
-            <div class="bamboo" title="Bamboo eaten today: one for each task you finish">${day.tasks.map((x) => `<span class="${x.status === 'done' ? 'on' : ''}">🎋</span>`).join('')}</div>
-          </div>
-          ${st.canRest ? `<button class="link small" id="rest-day">😴 Let ${n} nap today (a rest day, once a week, no worries)</button>` : ''}
-        </div>
-      </section>`;
-  }
 
   // ---------- skill check (adaptive placement before any tasks) ----------
   let pl = null;
@@ -1153,7 +1201,7 @@
     const answered = pl.answers.filter((a) => !a.unsure);
     const avg = answered.length ? answered.reduce((n, a) => n + a.t, 0) / answered.length : 99;
     if (answered.length >= 3 && avg < 2.5) {
-      box.innerHTML = `<div class="result"><div class="center-art">${pandaSVG('waiting', 90)}</div><h2>That went fast!</h2>
+      box.innerHTML = `<div class="result"><div class="center-art"><span class="art">🧭</span></div><h2>That went fast!</h2>
         <p>Answers that quick don't show us your real level. Take your time, and if you don't know one, choose “I'm not sure”. That's totally fine.</p>
         <button class="btn" id="pl-redo">Redo this section</button></div>`;
       $('#pl-redo').addEventListener('click', () => { plStartDomain(pl); drawPlacement(); });
@@ -1176,7 +1224,7 @@
     checkBadges(); save(); renderNav('practice');
     box.innerHTML = `
       <div class="result">
-        <div class="center-art">${pandaSVG('happy', 100)}</div>
+        <div class="center-art"><span class="art">🎉</span></div>
         <h2>Here's where you're starting</h2>
         <div class="levels-list">${p.domains.map((d) => `<div class="skill"><span>${D.DOMAINS[d].emoji} ${D.DOMAINS[d].name}<small class="muted"> ${levelName(p.results[d])}</small></span><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= p.results[d] ? 'on' : ''}"></i>`).join('')}</span></div>`).join('')}</div>
         <p class="muted">This isn't a grade. It just means practice starts in the right spot, and moves up as you grow. You can edit your schedule any time.</p>
@@ -1193,9 +1241,9 @@
       const doms = unplaced();
       return `
       <section class="card narrow quiz" id="quiz">
-        <div class="center-art">${pandaSVG('waiting', 110)}</div>
+        <div class="center-art"><span class="art">🧭</span></div>
         <h2 class="center">Let's see where you're starting, ${esc(S.profile.name)}</h2>
-        <p>Before ${esc(pandaName())} plans anything, a quick skill check helps us start you in the right place. It's <b>${doms.length} short section${doms.length === 1 ? '' : 's'}</b> (${doms.map((d) => D.DOMAINS[d].name).join(', ')}), about ${doms.length * 2} minutes.</p>
+        <p>Before we plan anything, a quick skill check helps us start you in the right place. It's <b>${doms.length} short section${doms.length === 1 ? '' : 's'}</b> (${doms.map((d) => D.DOMAINS[d].name).join(', ')}), about ${doms.length * 2} minutes.</p>
         <ul class="checklist"><li>It's <b>not a grade</b>. There's no pass or fail.</li><li>Questions get easier or harder based on your answers.</li><li>Not sure? Choose “I'm not sure”. That's better than guessing.</li></ul>
         <div class="row center"><button class="btn big" id="sc-start">Start skill check</button></div>
         <p class="center small"><button class="link" id="sc-skip">Skip for now (we'll start you at a typical level for grade ${esc(S.profile.grade)})</button></p>
@@ -1233,29 +1281,13 @@
     </article>`;
   }
 
-  routes.explore = {
-    html: () => {
-      const { rec, other } = activityLists();
-      const c = career();
-      return `
-      <section class="card">
-        <h2>🔭 Try-outs</h2>
-        <p class="muted">Small taste-tests of clubs and activities. Each one takes about 15–25 minutes and you can do it right here. There are no grades, they never affect your streak, and “not for me” is a perfectly good answer. Finding out what you <i>don't</i> like is just as useful.</p>
-        <h3>${c ? `Good fits for a ${esc(c.title)}` : 'Good fits for your top career matches'}</h3>
-        <div class="acts">${rec.map(actCard).join('')}</div>
-        <h3>Explore something different</h3>
-        <div class="acts">${other.map(actCard).join('')}</div>
-      </section>`;
-    },
-  };
-
   routes.tryout = {
     html: (id) => {
       const a = D.ACTIVITIES.find((x) => x.id === id);
       if (!a) return `<section class="card narrow"><p>Activity not found.</p><a class="btn" href="#/explore">Back to try-outs</a></section>`;
       return `
       <section class="card narrow">
-        <a class="link small" href="#/explore">← All try-outs</a>
+        <a class="back" href="#/explore?tab=tryouts">← All try-outs</a>
         <div class="act-top big"><span class="act-emoji">${a.emoji}</span><div><h2>${esc(a.name)} taster</h2><p class="muted">${esc(a.blurb)}</p></div></div>
         <p class="small muted">⏱️ About ${a.minutes} minutes · Real clubs: ${esc(a.commit)}</p>
         <ol class="trysteps">${a.steps.map((st, i) => `
@@ -1306,13 +1338,13 @@
         const out = $('#try-out');
         $('#rate').hidden = true;
         out.hidden = false;
-        out.innerHTML = `<div class="center-art">${pandaSVG(rating >= 3 ? 'happy' : 'content', 90)}</div>
+        out.innerHTML = `<div class="center-art"><span class="art">${rating >= 3 ? '🎉' : '🙂'}</span></div>
           <h3 class="center">${D.RATINGS.find((r) => r.v === rating).emoji} Thanks for trying it!</h3>
           <p>${msg}</p>
-          ${rating >= 3 && !onPath ? `<p class="adapt">This one isn't on your ${c ? esc(c.title) : 'current'} path, but pay attention to what you enjoy. Interests can point to new careers. <a href="#/careers">See if your matches changed →</a></p>` : ''}
+          ${rating >= 3 && !onPath ? `<p class="adapt">This one isn't on your ${c ? esc(c.title) : 'current'} path, but pay attention to what you enjoy. Interests can point to new careers. <a href="#/reveal">See if your matches changed →</a></p>` : ''}
           <div class="row center">
             ${rating >= 3 && S.plan && !S.tryouts[a.id].reminded ? `<button class="btn ghost" id="remind">📌 Add a reminder to my schedule</button>` : ''}
-            <a class="btn" href="#/explore">Try something else</a></div>`;
+            <a class="btn" href="#/explore?tab=tryouts">Try something else</a></div>`;
         const rb = $('#remind');
         if (rb) rb.addEventListener('click', () => {
           const d = addDays(today(), 1);
@@ -1388,13 +1420,13 @@
       const readSecs = (lq.shownAt - lq.opened) / 1000 - 8; // rough time before the check began
       const skimmed = (Date.now() - lq.opened) / 1000 < 25;
       completeTask(lq.id, 'auto', { correct: lq.correct, of: lq.qs.length }, (12 + lq.correct * 4) * (skimmed ? 0.4 : 1), 'Lesson');
-      box.innerHTML = `<div class="result"><div class="center-art">${pandaSVG('happy', 100)}</div>
+      box.innerHTML = `<div class="result"><div class="center-art"><span class="art">🎉</span></div>
         <h2>${lq.correct === 3 ? 'You got it! 🌟' : 'Nice, that clicked! 👍'}</h2>
         <p>${lq.correct}/${lq.qs.length} on the check.${skimmed ? ' (That was quick. If it felt too easy, your next lessons will move up as you practice.)' : ''} Now the practice will make sense.</p>
         <div class="row center"><a class="btn big" href="#/today">Continue →</a></div></div>`;
     } else {
       t.fails = (t.fails || 0) + 1; save();
-      box.innerHTML = `<div class="result"><div class="center-art">${pandaSVG('content', 90)}</div>
+      box.innerHTML = `<div class="result"><div class="center-art"><span class="art">🙂</span></div>
         <h2>Let's read it once more</h2>
         <p>${lq.correct}/${lq.qs.length}. That's okay! The check is just to make sure it clicked before practice. Read the lesson again and try fresh questions.</p>
         <div class="row center"><button class="btn" id="reread">Read the lesson again</button>
@@ -1575,7 +1607,7 @@
     else { addXP(xp * 0.6, 'Python practice'); checkBadges(); }
     save(); renderNav('code');
     const next = cs.taskId ? '<a class="btn big" href="#/today">Back to today →</a>' : '<a class="btn big" href="#/code">Next exercise →</a>';
-    res.innerHTML = `<div class="result-box ok-box"><div class="center-art">${pandaSVG('happy', 90)}</div>
+    res.innerHTML = `<div class="result-box ok-box"><div class="center-art"><span class="art">🎉</span></div>
       <h3 class="center">All tests passed! 🎉</h3>
       <p class="center">${cs.sol ? 'Nice work typing it out. Next time you will write it yourself.' : cs.runs === 1 ? 'First try!' : `Solved in ${cs.runs} runs. Debugging is the real skill.`}${note ? '<br><b>' + esc(note) + '</b>' : ''}</p>
       <ul class="tests">${rows}</ul>${printed}
