@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Geometry Unit Practice Test</title>
+<style>
+  @page { size: Letter; margin: 0.5in; }
+  :root { --ink:#111827; --muted:#6b7280; --line:#d1d5db; }
+  * { box-sizing: border-box; }
+  body { font: 11.5pt/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); margin: 0; background:#fff; }
+  main { max-width: 7.5in; margin: 0 auto; }
+  h1 { margin: 0; font-size: 20pt; }
+  h2 { margin: 18px 0 4px; font-size: 13pt; border-bottom: 2px solid var(--ink); padding-bottom: 2px; break-after: avoid; }
+  .sub { color: var(--muted); margin: 0 0 8px; font-size: 10pt; }
+  .head { display:flex; gap:24px; margin: 10px 0 4px; font-size: 11pt; }
+  .head span { flex:1; border-bottom:1px solid var(--ink); padding-bottom:2px; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .prob { break-inside: avoid; page-break-inside: avoid; margin: 0 0 8px; }
+  .prob p { margin: 0 0 4px; }
+  .n { display:inline-block; min-width: 1.8em; font-weight:700; }
+  .pts { color: var(--muted); font-size: 9pt; }
+  svg { width:100%; height:auto; display:block; border:1px solid var(--line); }
+  .lines { border-bottom:1px solid var(--ink); height: 24px; }
+  .opts { margin: 2px 0 0 1.8em; }
+  .opts div { margin: 1px 0; }
+  .ans { color:#b91c1c; font-weight:600; }
+  .box { border:1px solid var(--line); border-radius:6px; padding:8px 12px; background:#f9fafb; margin:8px 0; font-size:10pt; }
+  .pb { break-before: page; page-break-before: always; }
+</style>
+</head>
+<body>
+<main id="root"></main>
+
+<script>
+var MODE = location.hash === "#key" ? "key" : "test";
+var U = 20, R = 6, PAD = 16, SIZE = 2 * R * U + 2 * PAD;
+function sx(x) { return PAD + (x + R) * U; }
+function sy(y) { return PAD + (R - y) * U; }
+function pts(a) { return a.map(function (p) { return sx(p[0]) + "," + sy(p[1]); }).join(" "); }
+
+function poly(p, names, mark, color) {
+  var s = '<polygon points="' + pts(p) + '" fill="' + color + '" fill-opacity="0.12" stroke="' + color + '" stroke-width="1.8"/>';
+  p.forEach(function (pt, i) {
+    s += '<circle cx="' + sx(pt[0]) + '" cy="' + sy(pt[1]) + '" r="2.6" fill="' + color + '"/>';
+    s += '<text x="' + (sx(pt[0]) + 5) + '" y="' + (sy(pt[1]) - 5) + '" font-size="11" font-weight="700" fill="' + color + '">' + names[i] + mark + "</text>";
+  });
+  return s;
+}
+function grid(p, mode) {
+  var s = '<svg viewBox="0 0 ' + SIZE + " " + SIZE + '" xmlns="http://www.w3.org/2000/svg">';
+  for (var i = -R; i <= R; i++) {
+    var z = i === 0, c = z ? "#111" : "#d1d5db", w = z ? 1.6 : 0.6;
+    s += '<line x1="' + sx(i) + '" y1="' + sy(-R) + '" x2="' + sx(i) + '" y2="' + sy(R) + '" stroke="' + c + '" stroke-width="' + w + '"/>';
+    s += '<line x1="' + sx(-R) + '" y1="' + sy(i) + '" x2="' + sx(R) + '" y2="' + sy(i) + '" stroke="' + c + '" stroke-width="' + w + '"/>';
+    if (i !== 0 && i % 2 === 0) {
+      s += '<text x="' + sx(i) + '" y="' + (sy(0) + 11) + '" font-size="8" text-anchor="middle" fill="#555">' + i + "</text>";
+      s += '<text x="' + (sx(0) - 4) + '" y="' + (sy(i) + 3) + '" font-size="8" text-anchor="end" fill="#555">' + i + "</text>";
+    }
+  }
+  s += '<text x="' + (SIZE - 4) + '" y="' + (sy(0) - 4) + '" font-size="9" text-anchor="end">x</text><text x="' + (sx(0) + 5) + '" y="11" font-size="9">y</text>';
+  if (p.line) {
+    var L = p.line, a, b;
+    if (L.t === "v") { a = [L.v, -R]; b = [L.v, R]; } else if (L.t === "h") { a = [-R, L.v]; b = [R, L.v]; } else { a = [-R, -R]; b = [R, R]; }
+    s += '<line x1="' + sx(a[0]) + '" y1="' + sy(a[1]) + '" x2="' + sx(b[0]) + '" y2="' + sy(b[1]) + '" stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5 3"/>';
+    s += '<text x="' + (sx(b[0]) - 4) + '" y="' + (sy(b[1]) + 12) + '" font-size="9" fill="#16a34a" text-anchor="end">' + L.label + "</text>";
+  }
+  if (p.center) {
+    s += '<circle cx="' + sx(p.center[0]) + '" cy="' + sy(p.center[1]) + '" r="4" fill="#16a34a"/><text x="' + (sx(p.center[0]) + 6) + '" y="' + (sy(p.center[1]) + 12) + '" font-size="9" fill="#16a34a">center</text>';
+  }
+  s += poly(p.pre, p.names, "", "#2563eb");
+  if (mode === "key" || p.showImg) s += poly(p.img, p.names, "'", "#dc2626");
+  return s + "</svg>";
+}
+function fmt(p, names) { return p.map(function (pt, i) { return names[i] + "'(" + pt[0] + ", " + pt[1] + ")"; }).join(", "); }
+
+// ---------- given figures for constructions ----------
+function dot(x, y, l, dx, dy) { return '<circle cx="' + x + '" cy="' + y + '" r="3" fill="#111"/><text x="' + (x + (dx || 6)) + '" y="' + (y + (dy || -6)) + '" font-size="12" font-weight="700">' + l + "</text>"; }
+function ln(a, b, c, d, w) { return '<line x1="' + a + '" y1="' + b + '" x2="' + c + '" y2="' + d + '" stroke="#111" stroke-width="' + (w || 1.8) + '"/>'; }
+function fig(inner) { return '<svg viewBox="0 0 600 210" xmlns="http://www.w3.org/2000/svg">' + inner + "</svg>"; }
+var figs = {
+  seg: fig(ln(90, 140, 510, 90) + dot(90, 140, "X", -4, 18) + dot(510, 90, "Y", 8, 16)),
+  copyAngle: fig(ln(60, 170, 270, 170) + ln(60, 170, 190, 50) + dot(60, 170, "V", -4, 18) +
+    ln(340, 180, 570, 180) + dot(340, 180, "W", -4, 18) + '<text x="440" y="168" font-size="11" fill="#555">new ray</text>'),
+  bisect: fig(ln(60, 180, 540, 180) + ln(60, 180, 460, 50) + dot(60, 180, "B", -4, 18)),
+  perp: fig(ln(40, 160, 560, 125) + dot(300, 40, "P", 8, 4)),
+  hex: fig('<circle cx="300" cy="105" r="85" fill="none" stroke="#111" stroke-width="1.8"/>' + dot(300, 105, "O", -14, 16) + dot(385, 105, "A", 8, 4))
+};
+
+// ---------- content ----------
+var mc = [
+  { q: "Which of these is <b>not</b> a rigid transformation?", o: ["Translation", "Reflection", "Dilation by a factor of 3", "Rotation"], a: "C", why: "A dilation changes side lengths." },
+  { q: "A reflection maps P(&minus;3, 4) to P'(&minus;3, &minus;4). What is the line of reflection?", o: ["the x-axis", "the y-axis", "y = x", "x = &minus;3"], a: "A", why: "The y-value flips sign and x stays the same, so the line is the x-axis." },
+  { q: "Rotating (2, 5) by 90&deg; counterclockwise about the origin gives:", o: ["(5, &minus;2)", "(&minus;5, 2)", "(&minus;2, &minus;5)", "(5, 2)"], a: "B", why: "(x, y) &rarr; (&minus;y, x) gives (&minus;5, 2)." },
+  { q: "A translation maps (&minus;2, 3) to (4, &minus;1). Where does it send (0, 0)?", o: ["(2, 2)", "(&minus;6, 4)", "(6, &minus;4)", "(4, &minus;1)"], a: "C", why: "The shift is (+6, &minus;4), so (0, 0) goes to (6, &minus;4)." },
+  { q: "When you construct a perpendicular bisector, you draw arcs of the same radius from both endpoints. Why does that make the crossing points land on the bisector?", o: ["Equal radii make each crossing point equally far from both endpoints", "It makes the segment twice as long", "It makes the arcs parallel", "It guarantees a 60&deg; angle"], a: "A", why: "Every point equally far from both endpoints lies on the perpendicular bisector." },
+  { q: "Triangle A'B'C' is the image of triangle ABC after a reflection. Which statement must be true?", o: ["AB = A'B'", "&ang;A = 2(&ang;A')", "The area of A'B'C' is double that of ABC", "The vertices go around in the same direction"], a: "A", why: "Reflections preserve distance. They reverse orientation, so D is false." }
+];
+
+var grids = [
+  { text: "Translate triangle ABC by &lang;&minus;3, 4&rang;.", names: "ABC", pre: [[1,-4],[4,-4],[1,-1]], img: [[-2,0],[1,0],[-2,3]], ans: "Subtract 3 from each x, add 4 to each y." },
+  { text: "Reflect triangle DEF over the <b>x-axis</b>.", names: "DEF", pre: [[-5,2],[-1,2],[-3,5]], img: [[-5,-2],[-1,-2],[-3,-5]], ans: "(x, y) &rarr; (x, &minus;y)." },
+  { text: "Reflect triangle GHJ over the line <b>y = 1</b>. (Each point and its image are the same distance from the line.)", names: "GHJ", pre: [[-5,-3],[-2,-3],[-5,0]], img: [[-5,5],[-2,5],[-5,2]], line: { t: "h", v: 1, label: "y = 1" }, ans: "y &rarr; 2 &minus; y. G and H are 4 below the line so G' and H' are 4 above (y = 5). J is 1 below so J' is 1 above (y = 2)." },
+  { text: "Reflect triangle KLM over the line <b>y = x</b>.", names: "KLM", pre: [[2,-5],[5,-5],[5,-2]], img: [[-5,2],[-5,5],[-2,5]], line: { t: "d", label: "y = x" }, ans: "(x, y) &rarr; (y, x): swap the coordinates." },
+  { text: "Rotate triangle NOP <b>90&deg; clockwise</b> about the origin.", names: "NOP", pre: [[-5,1],[-2,1],[-5,4]], img: [[1,5],[1,2],[4,5]], ans: "(x, y) &rarr; (y, &minus;x)." },
+  { text: "Rotate square QRST <b>180&deg;</b> about the origin.", names: "QRST", pre: [[1,2],[5,2],[5,5],[1,5]], img: [[-1,-2],[-5,-2],[-5,-5],[-1,-5]], ans: "(x, y) &rarr; (&minus;x, &minus;y)." },
+  { text: "Rotate triangle VWX <b>90&deg; counterclockwise</b> about the point (2, &minus;1), <b>not</b> the origin.", names: "VWX", pre: [[3,-1],[6,-1],[3,-4]], img: [[2,0],[2,3],[5,0]], center: [2,-1], ans: "Subtract the center: (1,0), (4,0), (1,&minus;3). Rotate with (x,y)&rarr;(&minus;y,x): (0,1), (0,4), (3,1). Add the center back: (2,0), (2,3), (5,0)." },
+  { text: "Triangle ABC: <b>first</b> reflect over the y-axis, <b>then</b> translate by &lang;1, &minus;3&rang;.", names: "ABC", pre: [[1,2],[5,2],[1,4]], img: [[0,-1],[-4,-1],[0,1]], ans: "After the reflection: (&minus;1,2), (&minus;5,2), (&minus;1,4). After the translation: (0,&minus;1), (&minus;4,&minus;1), (0,1)." }
+];
+
+var describes = [
+  { text: "Describe the transformation that maps triangle ABC to A'B'C'. Be specific (direction, angle, center).", names: "ABC", pre: [[1,2],[4,2],[1,5]], img: [[2,-1],[2,-4],[5,-1]], showImg: true, ans: "Rotation of 90&deg; clockwise about the origin (same as 270&deg; counterclockwise)." },
+  { text: "Describe the transformation that maps triangle ABC to A'B'C'. Give the equation of the line.", names: "ABC", pre: [[-3,1],[-1,1],[-3,4]], img: [[5,1],[3,1],[5,4]], showImg: true, line: { t: "v", v: 1, label: "" }, ans: "Reflection over the vertical line x = 1 (the line halfway between x = &minus;3 and x = 5)." },
+  { text: "Describe the transformation that maps triangle ABC to A'B'C'. Give the vector.", names: "ABC", pre: [[-5,2],[-2,2],[-5,5]], img: [[-1,-4],[2,-4],[-1,-1]], showImg: true, ans: "Translation by &lang;4, &minus;6&rang;." }
+];
+// the dashed line on problem D2 is only for the key
+describes[1].keyOnlyLine = true;
+
+var reasoning = [
+  { q: "Triangle ABC has A(0, 0), B(3, 0), C(0, 4). Triangle DEF has D(5, 1), E(8, 1), F(5, 5). Describe a translation that maps ABC onto DEF, and use it to explain why the triangles are congruent.",
+    a: "The translation &lang;5, 1&rang; sends A&rarr;(5,1)=D, B&rarr;(8,1)=E, C&rarr;(5,5)=F. A translation is a rigid transformation, so it preserves lengths and angles. The triangles are congruent." },
+  { q: "Triangle PQR has P(1, 1), Q(4, 1), R(1, 3). Triangle P'Q'R' has P'(2, 2), Q'(8, 2), R'(2, 6). Could a rigid transformation map PQR onto P'Q'R'? Use side lengths to explain.",
+    a: "No. PQ = 3 but P'Q' = 6. Rigid transformations preserve distance, so they can't change a side from 3 to 6. This is a dilation by a factor of 2, so the triangles are similar but not congruent." },
+  { q: "The point (4, &minus;3) is rotated 90&deg; counterclockwise about the origin and then reflected over the x-axis. Find the final point. Would doing the two steps in the opposite order give the same point? Show work.",
+    a: "Rotate: (4,&minus;3) &rarr; (3, 4). Reflect over the x-axis: (3, &minus;4). <br>Opposite order: reflect first (4, 3), then rotate &rarr; (&minus;3, 4). That is a different point, so order matters." },
+  { q: "Segment AB has endpoints A(&minus;2, 1) and B(2, 4). It is reflected over the y-axis. Find the length of A'B' <b>without</b> computing the new coordinates, and explain how you know.",
+    a: "AB = &radic;(4&sup2; + 3&sup2;) = 5. A reflection is a rigid transformation, so it preserves length. A'B' = 5." },
+  { q: "A(2, 6) maps to A'(2, 0) and B(&minus;3, 5) maps to B'(&minus;3, 1) under a reflection. Find the line of reflection and check it with both points.",
+    a: "The x-values don't change, so the line is horizontal. Midpoint of 6 and 0 is 3, and midpoint of 5 and 1 is 3. Both agree: the line is y = 3." }
+];
+
+var cons = [
+  { q: "Construct the <b>perpendicular bisector</b> of XY.", f: "seg", a: "Open the compass wider than half of XY. Draw arcs from X and from Y that cross above and below. Draw a line through the two crossings. <b>Why:</b> each crossing is the same distance from X and Y." },
+  { q: "Construct a <b>copy of the angle</b> at V, with its vertex at W and one side along the new ray.", f: "copyAngle", a: "Draw an arc centered at V crossing both sides, and the same-radius arc centered at W. Measure the chord between the two crossing points on the first arc, and mark that chord on the new arc. Draw the ray from W through that mark. <b>Why:</b> the triangles formed have three equal sides (SSS), so the angles match." },
+  { q: "Construct the <b>angle bisector</b> of the angle at B.", f: "bisect", a: "Arc from B to cross both sides. From each crossing draw an arc of equal radius so they intersect inside the angle. Draw the ray from B through the intersection. <b>Why:</b> the two triangles are congruent (SSS), so the angles on both sides of the ray are equal." },
+  { q: "Construct the line <b>perpendicular</b> to the given line through point P.", f: "perp", a: "Draw an arc centered at P that crosses the line in two places. From each crossing draw equal arcs on the other side of the line so they cross. Draw a line from P through that crossing. <b>Why:</b> P and the crossing are both equidistant from the two points on the line, so they lie on its perpendicular bisector." },
+  { q: "Starting at A, construct a <b>regular hexagon</b> inscribed in the circle with center O.", f: "hex", a: "Set the compass to the radius OA. Starting at A, step around the circle marking arcs six times. Connect consecutive points. <b>Why:</b> a radius-length chord forms an equilateral triangle with the center, so each central angle is 60&deg;, and 6 &times; 60&deg; = 360&deg;." }
+];
+
+// ---------- render ----------
+function render() {
+  var h = "", n = 0;
+  var title = MODE === "key" ? "Answer Key" : "Unit Practice Test";
+  h += "<h1>" + title + "</h1><p class='sub'>Geometric Constructions &amp; Rigid Transformations &nbsp;|&nbsp; 53 points &nbsp;|&nbsp; about 60 minutes</p>";
+  if (MODE === "test") {
+    h += "<div class='head'><span>Name:</span><span>Date:</span><span>Score: &nbsp;&nbsp;&nbsp;/ 53</span></div>";
+    h += "<div class='box'>Use pencil, a ruler, and a compass. On grid problems, draw the image, label it with primes (A', B', C'), and write the new coordinates beside the grid. Counterclockwise is the positive direction for rotations.</div>";
+  } else {
+    h += "<div class='box'>Blue = original, red = image. Total 53 points. Multiple choice 1 pt each (6). Grid problems 2 pts each (16): 2 if every vertex is right, 1 if one vertex is off or the method is right. Describe 2 pts each (6). Reasoning 2 pts each (10). Constructions 3 pts each (15): 2 for clean, accurate arcs and 1 for the explanation.</div>";
+  }
+
+  // Part 1
+  h += "<h2>Part 1: Multiple Choice <span class='pts'>(1 point each)</span></h2>";
+  mc.forEach(function (m) {
+    n++;
+    h += "<div class='prob'><p><span class='n'>" + n + ".</span>" + m.q + "</p>";
+    if (MODE === "test") {
+      h += "<div class='opts'>" + m.o.map(function (o, i) { return "<div>" + "ABCD".charAt(i) + ". " + o + "</div>"; }).join("") + "</div>";
+    } else {
+      h += "<div class='opts ans'>" + m.a + ". " + m.o["ABCD".indexOf(m.a)] + "</div><div class='opts'>" + m.why + "</div>";
+    }
+    h += "</div>";
+  });
+
+  // Part 2
+  h += "<h2 class='pb'>Part 2: Draw the Image <span class='pts'>(2 points each)</span></h2><div class='grid2'>";
+  grids.forEach(function (g) {
+    n++;
+    h += "<div class='prob'><p><span class='n'>" + n + ".</span>" + g.text + "</p>" + grid(g, MODE);
+    if (MODE === "key") h += "<p><span class='ans'>" + fmt(g.img, g.names) + "</span><br>" + g.ans + "</p>";
+    else h += "<div class='lines'></div>";
+    h += "</div>";
+  });
+  h += "</div>";
+
+  // Part 3
+  h += "<h2>Part 3: Describe the Transformation <span class='pts'>(2 points each)</span></h2><div class='grid2'>";
+  describes.forEach(function (d, i) {
+    n++;
+    var dd = Object.assign({}, d);
+    if (d.keyOnlyLine && MODE === "test") delete dd.line;
+    if (dd.line && MODE === "key") dd.line = { t: "v", v: 1, label: "x = 1" };
+    h += "<div class='prob'><p><span class='n'>" + n + ".</span>" + d.text + "</p>" + grid(dd, MODE);
+    if (MODE === "key") h += "<p class='ans'>" + d.ans + "</p>"; else h += "<div class='lines'></div><div class='lines'></div>";
+    h += "</div>";
+  });
+  h += "</div>";
+
+  // Part 4
+  h += "<h2 class='pb'>Part 4: Congruence and Reasoning <span class='pts'>(2 points each)</span></h2>";
+  reasoning.forEach(function (r) {
+    n++;
+    h += "<div class='prob'><p><span class='n'>" + n + ".</span>" + r.q + "</p>";
+    if (MODE === "key") h += "<p class='ans' style='margin-left:1.8em'>" + r.a + "</p>";
+    else h += "<div class='lines'></div><div class='lines'></div><div class='lines'></div>";
+    h += "</div>";
+  });
+
+  // Part 5
+  h += "<h2 class='pb'>Part 5: Constructions <span class='pts'>(3 points each: 2 for the construction, 1 for the explanation)</span></h2>";
+  if (MODE === "test") h += "<p class='sub'>Leave all your construction arcs showing. Write one sentence below each figure explaining why your construction works.</p>";
+  cons.forEach(function (c) {
+    n++;
+    h += "<div class='prob'><p><span class='n'>" + n + ".</span>" + c.q + "</p>";
+    if (MODE === "key") h += "<p class='ans' style='margin-left:1.8em'>" + c.a + "</p>"; else h += figs[c.f] + "<div class='lines'></div>";
+    h += "</div>";
+  });
+
+  document.getElementById("root").innerHTML = h;
+}
+render();
+</script>
+</body>
+</html>
