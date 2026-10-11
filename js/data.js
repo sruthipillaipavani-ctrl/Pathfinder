@@ -9,26 +9,144 @@ window.PF_DATA = (function () {
     C: { name: 'Organizer', desc: 'Careful, detail-oriented, likes plans, lists, and systems.' },
   };
 
-  // Likert statements (1 = Not me, 5 = Totally me), three per trait.
+  const IKIGAI_CIRCLES = {
+    love: { name: 'What you love', desc: 'Activities that make you curious, joyful, or absorbed.' },
+    world: { name: 'What people need', desc: 'Ways you might help a community or improve life for others.' },
+    paid: { name: 'What you could be paid for', desc: 'Work and skills that people or organizations value.' },
+    good: { name: 'What you are good at', desc: 'Strengths you have now or want to keep developing.' },
+  };
+
+  const DIMENSIONS = {
+    analytical: { name: 'Analytical Thinker', desc: 'Reasoning, logic, patterns, and structured problem-solving.' },
+    creative: { name: 'Creative Visionary', desc: 'Imagination, original ideas, and alternative possibilities.' },
+    people: { name: 'People-Focused Collaborator', desc: 'Empathy, communication, and understanding perspectives.' },
+    leader: { name: 'Leader & Implementer', desc: 'Initiative, organizing, decisions, and making ideas happen.' },
+    investigator: { name: 'Investigator & Researcher', desc: 'Curiosity, evidence, discovery, and unanswered questions.' },
+    builder: { name: 'Technology & Hands-On Builder', desc: 'Experimentation, practical problems, tools, and systems.' },
+  };
+
+  // Fifteen questions each provide one option for every dimension.
   const QUESTIONS = [
-    { t: 'R', q: 'I like building things — LEGO, models, robots, or crafts.' },
-    { t: 'I', q: 'I enjoy solving puzzles, riddles, or tricky math problems.' },
-    { t: 'A', q: 'I often draw, write stories, make music, or design things for fun.' },
-    { t: 'S', q: 'Friends come to me when they need advice or help.' },
-    { t: 'E', q: 'I like being the one who leads a group project.' },
-    { t: 'C', q: 'I keep my notes, room, or files neat and organized.' },
-    { t: 'I', q: 'I wonder how things work and look up answers on my own.' },
-    { t: 'R', q: 'I would rather do a hands-on experiment than read about it.' },
-    { t: 'S', q: 'I enjoy explaining things to younger kids or classmates.' },
-    { t: 'A', q: 'I like coming up with original ideas nobody has tried before.' },
-    { t: 'C', q: 'I like following a clear plan and checking things off a list.' },
-    { t: 'E', q: 'I enjoy convincing people, debating, or selling an idea.' },
-    { t: 'I', q: 'Science and math class are usually where I feel most interested.' },
-    { t: 'R', q: 'I like being outdoors, working with tools, or playing sports.' },
-    { t: 'A', q: 'I notice colors, layouts, and style in things around me.' },
-    { t: 'S', q: 'I care a lot about making the world fairer or healthier for people.' },
-    { t: 'E', q: 'I dream about starting my own business or club someday.' },
-    { t: 'C', q: 'I am good with numbers, budgets, or keeping track of details.' },
+    { q: 'You have a completely free afternoon. What are you most likely to do?', options: [
+      { text: 'Explore a topic I know little about.', dimension: 'analytical' },
+      { text: 'Create something inspired by an idea I have.', dimension: 'creative' },
+      { text: 'Spend time talking with people and hearing their perspectives.', dimension: 'people' },
+      { text: 'Work on a project I want to bring to life.', dimension: 'leader' },
+      { text: 'Investigate a question I have been wondering about.', dimension: 'investigator' },
+      { text: 'Try out a tool, activity, or experiment just to see what happens.', dimension: 'builder' },
+    ] },
+    { q: "Your group gets a task with almost no instructions. What's your first instinct?", options: [
+      { text: 'Look for clues that help explain what the task requires.', dimension: 'analytical' },
+      { text: 'Suggest an unusual approach the group could try.', dimension: 'creative' },
+      { text: 'Ask everyone what they think.', dimension: 'people' },
+      { text: 'Help the group organize its next steps.', dimension: 'leader' },
+      { text: 'Research the topic to understand it better.', dimension: 'investigator' },
+      { text: 'Start testing possible approaches to see what works.', dimension: 'builder' },
+    ] },
+    { q: 'Which situation would bother you the most?', options: [
+      { text: 'Knowing something could work better but leaving it unchanged.', dimension: 'analytical' },
+      { text: 'Having an idea but no opportunity to express it.', dimension: 'creative' },
+      { text: 'Seeing someone misunderstood or left out.', dimension: 'people' },
+      { text: 'Watching a promising plan lose direction.', dimension: 'leader' },
+      { text: 'Being unable to find an explanation for something confusing.', dimension: 'investigator' },
+      { text: 'Having the tools to solve a problem but not being able to try them.', dimension: 'builder' },
+    ] },
+    { q: 'When you get interested in something new, what usually happens?', options: [
+      { text: 'I start looking for patterns and connections.', dimension: 'analytical' },
+      { text: 'I imagine different things I could do with it.', dimension: 'creative' },
+      { text: 'I think about how other people experience or understand it.', dimension: 'people' },
+      { text: 'I wonder how I could turn the idea into something real.', dimension: 'leader' },
+      { text: 'I look for evidence and information to learn more.', dimension: 'investigator' },
+      { text: 'I want to experiment with it and see how it works.', dimension: 'builder' },
+    ] },
+    { q: 'Your friend group is planning an event, but everyone disagrees. What would you probably do?', options: [
+      { text: 'Compare the options and identify what makes the most sense.', dimension: 'analytical' },
+      { text: 'Suggest a new idea that combines different preferences.', dimension: 'creative' },
+      { text: 'Try to understand what each person wants.', dimension: 'people' },
+      { text: 'Help the group make a decision and move forward.', dimension: 'leader' },
+      { text: 'Gather details about the options before deciding.', dimension: 'investigator' },
+      { text: 'Suggest trying a small version of one idea first.', dimension: 'builder' },
+    ] },
+    { q: 'Which compliment would mean the most to you?', options: [
+      { text: '"You notice things other people miss."', dimension: 'analytical' },
+      { text: '"You come up with ideas nobody else would think of."', dimension: 'creative' },
+      { text: '"You make people feel understood."', dimension: 'people' },
+      { text: '"You know how to turn plans into reality."', dimension: 'leader' },
+      { text: '"You ask questions that uncover the truth."', dimension: 'investigator' },
+      { text: '"You can figure out how to make things work."', dimension: 'builder' },
+    ] },
+    { q: 'You have a week to learn something unfamiliar. How would you approach it?', options: [
+      { text: 'Find the main concepts and work out how they connect.', dimension: 'analytical' },
+      { text: 'Explore creative examples and think about my own ideas.', dimension: 'creative' },
+      { text: 'Discuss it with people who have different perspectives.', dimension: 'people' },
+      { text: 'Set a goal and organize a plan to learn it.', dimension: 'leader' },
+      { text: 'Read, watch, and gather information first.', dimension: 'investigator' },
+      { text: 'Practice by building, testing, or trying things myself.', dimension: 'builder' },
+    ] },
+    { q: 'Which kind of problem would keep you thinking about it long after everyone else moved on?', options: [
+      { text: 'A complicated system that does not seem to add up.', dimension: 'analytical' },
+      { text: 'An ordinary thing that could be redesigned in an interesting way.', dimension: 'creative' },
+      { text: 'A disagreement where people see the same situation differently.', dimension: 'people' },
+      { text: 'A promising idea that nobody has figured out how to implement.', dimension: 'leader' },
+      { text: 'A mystery with missing pieces.', dimension: 'investigator' },
+      { text: 'A practical challenge that needs a clever solution.', dimension: 'builder' },
+    ] },
+    { q: 'Imagine you could change one thing about an ordinary school day. What would you choose?', options: [
+      { text: 'More time to solve challenging problems.', dimension: 'analytical' },
+      { text: 'More freedom to choose how I express ideas.', dimension: 'creative' },
+      { text: 'More opportunities to collaborate and exchange perspectives.', dimension: 'people' },
+      { text: 'More chances to lead projects and make decisions.', dimension: 'leader' },
+      { text: 'More opportunities to investigate topics in depth.', dimension: 'investigator' },
+      { text: 'More hands-on activities and experiments.', dimension: 'builder' },
+    ] },
+    { q: "When something you've worked on doesn't go as planned, what do you do first?", options: [
+      { text: 'Break down the problem and identify what went wrong.', dimension: 'analytical' },
+      { text: 'Think of another approach I could try.', dimension: 'creative' },
+      { text: "Ask for feedback and consider other people's perspectives.", dimension: 'people' },
+      { text: 'Reorganize the plan and decide what to do next.', dimension: 'leader' },
+      { text: 'Look for information I might have missed.', dimension: 'investigator' },
+      { text: 'Test possible fixes to see which one works.', dimension: 'builder' },
+    ] },
+    { q: "You're offered a chance to join an unfamiliar project. What would make you curious enough to say yes?", options: [
+      { text: 'It involves solving an interesting problem.', dimension: 'analytical' },
+      { text: 'I could explore an original idea.', dimension: 'creative' },
+      { text: 'I could work with people who have different perspectives.', dimension: 'people' },
+      { text: 'I could help develop an idea into a real outcome.', dimension: 'leader' },
+      { text: "I'll learn things I wouldn't discover otherwise.", dimension: 'investigator' },
+      { text: 'I could experiment with tools, technology, or materials.', dimension: 'builder' },
+    ] },
+    { q: 'Which situation sounds most satisfying at the end of a long day?', options: [
+      { text: 'Solving a problem that once seemed confusing.', dimension: 'analytical' },
+      { text: 'Creating something that reflects my ideas.', dimension: 'creative' },
+      { text: 'Helping a group understand each other.', dimension: 'people' },
+      { text: 'Making meaningful progress toward a goal.', dimension: 'leader' },
+      { text: "Discovering something I didn't know before.", dimension: 'investigator' },
+      { text: 'Getting something to work after experimenting with it.', dimension: 'builder' },
+    ] },
+    { q: 'When making an important decision, which detail do you tend to notice first?', options: [
+      { text: 'Whether the reasoning and evidence support it.', dimension: 'analytical' },
+      { text: "Whether there's another possibility.", dimension: 'creative' },
+      { text: 'How the decision could affect different people.', dimension: 'people' },
+      { text: 'Whether it moves me toward my goal.', dimension: 'leader' },
+      { text: 'What information I still need to understand.', dimension: 'investigator' },
+      { text: 'Whether the plan would work in practice.', dimension: 'builder' },
+    ] },
+    { q: "You're given access to a completely unfamiliar room full of supplies, tools, books, and equipment. What do you do?", options: [
+      { text: 'Examine the materials and look for interesting connections.', dimension: 'analytical' },
+      { text: 'Imagine something unusual I could create.', dimension: 'creative' },
+      { text: 'Ask someone to explore the room with me and share ideas.', dimension: 'people' },
+      { text: 'Choose a project and figure out what I could accomplish.', dimension: 'leader' },
+      { text: 'Read about unfamiliar items and investigate what they do.', dimension: 'investigator' },
+      { text: 'Pick something up and see what I can do with it.', dimension: 'builder' },
+    ] },
+    { q: 'Which statement feels closest to how you approach life?', options: [
+      { text: 'I want to understand how things fit together.', dimension: 'analytical' },
+      { text: 'I want to imagine possibilities that do not exist yet.', dimension: 'creative' },
+      { text: 'I want to understand people and different perspectives.', dimension: 'people' },
+      { text: 'I want to turn ideas into meaningful achievements.', dimension: 'leader' },
+      { text: 'I want to keep discovering how the world works.', dimension: 'investigator' },
+      { text: 'I want to figure out how to make things work better.', dimension: 'builder' },
+    ] },
   ];
 
   // Favorite-subject choices change with grade. Each entry is [label shown, base subject used for career matching].
@@ -693,5 +811,5 @@ window.PF_DATA = (function () {
 
   const LEVEL_TITLES = ['Novice', 'Apprentice', 'Explorer', 'Achiever', 'Trailblazer', 'Expert', 'Champion', 'Legend'];
 
-  return { ACTIVITIES, RATINGS, TRAITS, QUESTIONS, subjectsFor, baseSubject, SKILL_LEVELS, STAGES, CAREERS, REFLECT_PROMPTS, DOMAINS, BANK, BADGES, LEVEL_TITLES };
+  return { ACTIVITIES, RATINGS, TRAITS, IKIGAI_CIRCLES, DIMENSIONS, QUESTIONS, subjectsFor, baseSubject, SKILL_LEVELS, STAGES, CAREERS, REFLECT_PROMPTS, DOMAINS, BANK, BADGES, LEVEL_TITLES };
 })();

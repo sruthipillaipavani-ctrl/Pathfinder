@@ -18,7 +18,7 @@
 
   // ---------- state ----------
   const blank = () => ({
-    profile: null, personality: null, careerId: null, plan: null,
+    profile: null, personality: null, careerId: null, plan: null, quizDraft: null,
     skills: {}, xp: 0, coins: 0, badges: {}, reflections: [],
     integrity: { score: 100, log: [] },
     stats: { tasksDone: 0, reflectionsOk: 0 },
@@ -28,7 +28,7 @@
       { id: uid(), name: 'Favorite treat or snack', cost: 120 },
     ],
     version: 2, codeDone: {},
-    tryouts: {}, activity: {}, rest: {},
+    tryouts: {}, activity: {}, rest: {}, portfolio: [],
     settings: { demo: false },
   });
   let S = load();
@@ -56,6 +56,20 @@
   const unplaced = () => (S.careerId ? career().domains.filter((d) => !isPlaced(d)) : []);
   const level = () => Math.floor(S.xp / 250) + 1;
   const levelTitle = (l) => D.LEVEL_TITLES[Math.min(l - 1, D.LEVEL_TITLES.length - 1)];
+  const dailyQuote = () => {
+    const quotes = [
+      'Small projects are how big interests become real skills.',
+      'You do not need a perfect plan to take a useful first step.',
+      'Curiosity is worth following, even before you know where it leads.',
+      'The things you make and try can show what matters to you.',
+      'Progress comes from practice, reflection, and trying again.',
+      'Your path can change as you learn more about yourself.',
+      'An after-school hour can become the start of something meaningful.',
+    ];
+    const start = new Date(new Date().getFullYear(), 0, 0);
+    const day = Math.floor((new Date() - start) / 86400000);
+    return quotes[day % quotes.length];
+  };
 
   // ---------- toasts & rewards ----------
   function toast(msg, kind) {
@@ -77,8 +91,7 @@
     S.coins += Math.floor(S.xp / 10) - coinsBefore;
     toast(`+${n} XP${why ? ' · ' + esc(why) : ''}`, 'xp');
     if (level() > before) {
-      toast(`🎉 Level up! You are now Level ${level()} — <b>${levelTitle(level())}</b>`, 'big');
-      confetti();
+      toast(`Level up: Level ${level()} — <b>${levelTitle(level())}</b>`, 'big');
     }
   }
 
@@ -87,8 +100,7 @@
     const b = D.BADGES.find((x) => x.id === id);
     if (!b) return;
     S.badges[id] = today();
-    toast(`${b.emoji} Badge unlocked: <b>${esc(b.name)}</b>`, 'big');
-    confetti();
+    toast(`Badge earned: <b>${esc(b.name)}</b>`, 'big');
   }
 
   function integrity(delta, msg) {
@@ -116,37 +128,52 @@
     if (S.xp >= 1000) award('xp-1000');
   }
 
-  function confetti() {
-    const colors = ['#7c5cff', '#22c1a6', '#ffb020', '#ff5c8a', '#3fa9ff'];
-    for (let i = 0; i < 40; i++) {
-      const c = document.createElement('i');
-      c.className = 'confetti';
-      c.style.left = Math.random() * 100 + 'vw';
-      c.style.background = colors[i % colors.length];
-      c.style.animationDelay = Math.random() * 0.4 + 's';
-      c.style.transform = `rotate(${Math.random() * 360}deg)`;
-      document.body.appendChild(c);
-      setTimeout(() => c.remove(), 2600);
-    }
+  // ---------- personality & matching ----------
+  function dimensionScores(answers) {
+    const counts = {}, opportunities = {};
+    Object.keys(D.DIMENSIONS).forEach((dimension) => { counts[dimension] = 0; opportunities[dimension] = 0; });
+    D.QUESTIONS.forEach((question, index) => {
+      question.options.forEach((option) => { opportunities[option.dimension]++; });
+      const selected = question.options[answers[index]];
+      if (selected) counts[selected.dimension]++;
+    });
+    return Object.fromEntries(Object.keys(D.DIMENSIONS).map((dimension) => [
+      dimension,
+      opportunities[dimension] ? Math.round(counts[dimension] / opportunities[dimension] * 100) : 0,
+    ]));
   }
 
-  // ---------- personality & matching ----------
-  function traitScores(answers) {
-    const sums = {}, counts = {};
-    Object.keys(D.TRAITS).forEach((t) => { sums[t] = 0; counts[t] = 0; });
-    D.QUESTIONS.forEach((q, i) => { if (answers[i]) { sums[q.t] += answers[i]; counts[q.t]++; } });
-    const out = {};
-    Object.keys(sums).forEach((t) => { out[t] = counts[t] ? Math.round(((sums[t] / counts[t]) - 1) / 4 * 100) : 0; });
-    return out;
+  function legacyDimensionScores(personality) {
+    const traits = personality.traits || {};
+    const value = (key) => Number.isFinite(traits[key]) ? traits[key] : 50;
+    return {
+      analytical: Math.round((value('I') + value('C')) / 2),
+      creative: value('A'), people: value('S'), leader: value('E'),
+      investigator: value('I'), builder: value('R'),
+    };
+  }
+
+  function careerDimensionWeights(c) {
+    return {
+      analytical: (c.traits.I || 0) * 0.7 + (c.traits.C || 0) * 0.3,
+      creative: c.traits.A || 0,
+      people: c.traits.S || 0,
+      leader: c.traits.E || 0,
+      investigator: c.traits.I || 0,
+      builder: c.traits.R || 0,
+    };
   }
 
   function matchCareers() {
-    const tr = S.personality.traits;
+    const dimensions = S.personality.dimensions || legacyDimensionScores(S.personality);
     const p = S.profile;
     const text = [p.hobbies, p.interests, p.aspirations].join(' ').toLowerCase();
     return D.CAREERS.map((c) => {
-      const wsum = Object.values(c.traits).reduce((a, b) => a + b, 0);
-      const traitFit = Object.entries(c.traits).reduce((s, [t, w]) => s + (tr[t] || 0) * w, 0) / wsum; // 0-100
+      const roleWeights = careerDimensionWeights(c);
+      const weightTotal = Object.values(roleWeights).reduce((sum, weight) => sum + weight, 0);
+      const profileFit = weightTotal
+        ? Object.entries(roleWeights).reduce((sum, [dimension, weight]) => sum + (dimensions[dimension] ?? 50) * weight, 0) / weightTotal
+        : 50;
       const has = (phrase) => new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?\\b`).test(text);
       const kw = c.keywords.filter(has);
       // Interests the student tapped (as friendly labels) that connect to this career.
@@ -158,17 +185,19 @@
       const tried = D.ACTIVITIES.filter((a) => a.careers.includes(c.id) && S.tryouts[a.id]);
       const tryBonus = Math.max(-6, Math.min(10, tried.reduce((n, a) => n + ({ 4: 5, 3: 3, 2: 0, 1: -2 }[S.tryouts[a.id].rating] || 0), 0)));
       const loved = tried.filter((a) => S.tryouts[a.id].rating >= 3);
-      const score = Math.max(1, Math.min(99, Math.round(traitFit * 0.65 + Math.min(kw.length, 4) * 5 + Math.min(subj.length, 3) * 5 + (named ? 10 : 0) + tryBonus)));
+      const interestFit = Math.min(100, 45 + Math.min(kw.length, 4) * 6 + Math.min(subj.length, 3) * 5 + (named ? 10 : 0) + tryBonus);
+      const score = Math.max(1, Math.min(99, Math.round(profileFit * 0.75 + interestFit * 0.25)));
+      const strongest = Object.entries(dimensions).sort((a, b) => b[1] - a[1]);
+      const roleAligned = strongest.filter(([dimension]) => roleWeights[dimension] >= 1 && dimensions[dimension] >= 50).slice(0, 2);
       const reasons = [];
-      const topTraits = Object.entries(c.traits).sort((a, b) => b[1] - a[1]).slice(0, 2).filter(([t]) => tr[t] >= 55);
-      if (topTraits.length) reasons.push(`Your <b>${topTraits.map(([t]) => D.TRAITS[t].name).join(' + ')}</b> side fits this job`);
+      if (roleAligned.length) reasons.push(`Your <b>${roleAligned.map(([dimension]) => D.DIMENSIONS[dimension].name).join(' + ')}</b> patterns fit this work`);
       if (likedTiles.length) reasons.push(`You love <b>${likedTiles.slice(0, 3).map((t) => esc(t.label.toLowerCase())).join(', ')}</b>`);
       else if (kw.length) reasons.push(`You mentioned <b>${kw.slice(0, 3).map(esc).join(', ')}</b>`);
       if (subj.length) reasons.push(`You enjoy <b>${subj.map(esc).join(', ')}</b>`);
       if (named) reasons.push('It matches a goal you wrote down');
       if (loved.length) reasons.push(`You enjoyed trying <b>${loved.slice(0, 2).map((a) => esc(a.name)).join(', ')}</b>`);
       return { c, score, reasons };
-    }).sort((a, b) => b.score - a.score);
+    }).sort((a, b) => b.score - a.score || a.c.title.localeCompare(b.c.title));
   }
 
   // ---------- schedule ----------
@@ -216,7 +245,7 @@
     const tasks = [{ id: uid(), type: 'lesson', domain: dom, title: `Learn: ${name}`, minutes: round5(total * 0.35), status: 'todo' }];
     if (dom === 'coding') tasks.push({ id: uid(), type: 'code', domain: 'coding', title: 'Python exercise', minutes: round5(total * 0.45), status: 'todo' });
     else tasks.push({ id: uid(), type: 'practice', domain: dom, n: Math.max(4, Math.min(7, Math.round(5 * st.factor))), title: `${name} practice`, minutes: round5(total * 0.35), status: 'todo' });
-    tasks.push({ id: uid(), type: 'reflect', title: 'Daily reflection', prompt: fillCareer(D.REFLECT_PROMPTS[idx % D.REFLECT_PROMPTS.length], c.title), minutes: 5, status: 'todo' });
+    tasks.push({ id: uid(), type: 'reflect', title: 'Daily reflection', prompt: D.REFLECT_PROMPTS[idx % D.REFLECT_PROMPTS.length].replace(/\{career\}/g, c.title), minutes: 5, status: 'todo' });
     if (st.stretch) {
       const d2 = c.domains[(idx + 1) % c.domains.length];
       if (d2 !== 'coding') tasks.push({ id: uid(), type: 'practice', domain: d2, stretch: true, title: `Stretch challenge: ${D.DOMAINS[d2].name}`, minutes: 10, status: 'todo' });
@@ -226,11 +255,6 @@
       tasks.push({ id: uid(), type: 'milestone', title: ms[Math.floor(idx / 7) % ms.length], minutes: 15, status: 'todo' });
     }
     return { tasks, edited: false };
-  }
-
-  // Prompts say "a {career}"; swap in the right article ("an Actuary", "a Pilot").
-  function fillCareer(text, title) {
-    return text.replace(/\ba \{career\}/g, `${/^[aeio]/i.test(title) ? 'an' : 'a'} ${title}`).replace(/\{career\}/g, title);
   }
 
   function milestones(c) {
@@ -340,9 +364,9 @@
     let { name, arg, params } = currentRoute();
     name = ALIASES[name] || name;
     const STUDY = ['today', 'schedule', 'practice', 'focus', 'lesson', 'code', 'skillcheck'];
-    if (!S.personality) { if (name !== 'welcome' && name !== 'start') name = S.profile ? 'start' : 'welcome'; }
+    if (!S.personality && !['start', 'founders'].includes(name)) name = 'start';
     else if (!S.careerId && STUDY.includes(name)) name = 'reveal';
-    if (!name) name = S.careerId ? 'today' : S.personality ? 'reveal' : S.profile ? 'start' : 'welcome';
+    if (!name) name = S.careerId ? 'today' : S.personality ? 'reveal' : 'start';
     // Before any task is assigned, the student's level is checked with a short placement.
     if (S.careerId && unplaced().length && ['today', 'schedule', 'practice', 'focus', 'lesson', 'code'].includes(name)) name = 'skillcheck';
     if (name === 'skillcheck' && S.careerId && !unplaced().length) name = 'today';
@@ -354,7 +378,7 @@
     document.body.classList.toggle('focus', focusMode);
     document.body.dataset.route = name;
     const app = $('#app');
-    app.className = name === 'explore' ? 'wide' : '';
+    app.className = name === 'explore' ? 'wide' : name === 'founders' ? 'founders' : '';
     app.innerHTML = view.html(arg, params);
     $('#exit').setAttribute('href', exitTarget(name));
     renderNav(name);
@@ -366,12 +390,13 @@
     const act = { career: 'explore', tryout: 'explore', lesson: 'today', focus: 'today', code: 'practice', profile: 'rewards' }[active] || active;
     if (!S.personality) { $('#nav').innerHTML = ''; $('#hud').innerHTML = ''; return; }
     const items = S.careerId
-      ? [['today', '🏠', 'Today'], ['schedule', '🗺️', 'Path'], ['practice', '🧠', 'Practice'], ['explore', '🔭', 'Explore']]
-      : [['reveal', '✨', 'Matches'], ['explore', '🔭', 'Explore']];
+      ? [['today', '', 'Today'], ['schedule', '', 'Path'], ['practice', '', 'Practice'], ['explore', '', 'Explore']]
+      : [['reveal', '', 'Matches'], ['explore', '', 'Explore']];
+    items.push(['portfolio', '', 'Portfolio']);
     items.push(['rewards', '', 'Me']);
     $('#nav').innerHTML = items.map(([k, ico, label]) =>
       `<a href="#/${k}" class="${act === k ? 'active' : ''}">${ico ? `<span class="ico">${ico}</span>` : ''}${label}</a>`).join('');
-    $('#hud').innerHTML = S.careerId ? `<a class="chip-stat" href="#/rewards" title="Day streak">🔥 ${streak()}</a><a class="chip-stat" href="#/rewards" title="Level">⭐ ${level()}</a>` : '';
+    $('#hud').innerHTML = S.careerId ? `<a class="chip-stat" href="#/rewards" title="Day streak">Streak ${streak()}</a><a class="chip-stat" href="#/rewards" title="Level">Level ${level()}</a>` : '';
   }
 
   // ---------- views ----------
@@ -388,42 +413,122 @@
   }
   const article = (t) => (/^[aeio]/i.test(t) ? 'an' : 'a');
 
+  function collegeGuideHTML(c) {
+    const guide = c.collegeGuide;
+    if (!guide) return '';
+    if (guide.type === 'apprenticeship') {
+      return `<section class="college-guide"><p class="eyebrow">Training routes after high school</p><h3>College is one option, not a requirement</h3>
+        <p>${esc(guide.program)}</p><ul>${guide.routes.map((route) => `<li>${esc(route)}</li>`).join('')}</ul></section>`;
+    }
+    const tiers = [['Reach', guide.reach], ['Target', guide.target], ['Safety / likely', guide.likely]];
+    return `<section class="college-guide"><p class="eyebrow">Plan a balanced college list</p><h3>Programs to research for ${esc(c.title)}</h3>
+      <p>${esc(guide.program)}</p><div class="college-tiers">${tiers.map(([label, schools]) => `<div class="college-tier"><h4>${label}</h4><ul>${schools.map((school) => `<li>${esc(school)}</li>`).join('')}</ul></div>`).join('')}</div>
+      <p class="college-caveat">These are examples, not personalized admission predictions or guarantees. A school's reach, target, or likely status depends on your grades, course choices, residency, finances, and application year. Check current program requirements and build your list with a school counselor.</p>
+    </section>`;
+  }
+
+  // Extracurriculars for a career, each with a short do-it-now demo and how to join a real one.
+  function careerActivitiesHTML(c) {
+    const acts = D.ACTIVITIES.filter((a) => a.careers.includes(c.id));
+    if (!acts.length) return '';
+    return `<section class="act-section"><p class="eyebrow">Try it before you commit</p>
+      <h3>Extracurriculars for ${esc(c.title)}</h3>
+      <p class="muted">Short demos you can do right now (15–25 minutes each). Curious about one? Start it and see how it feels.</p>
+      <div class="acts">${acts.map((a) => {
+        const t = S.tryouts[a.id];
+        const r = t && D.RATINGS.find((x) => x.v === t.rating);
+        return `<article class="act">
+          <div class="act-top"><span class="act-emoji">${a.emoji}</span><div><h3>${esc(a.name)}</h3><p>${esc(a.blurb)}</p></div></div>
+          <p class="small muted">⏱️ ${a.minutes}-min demo · ${esc(a.commit)}</p>
+          <details class="join"><summary>How to join a real one</summary><p>${esc(a.join)}</p></details>
+          <div class="row">${r ? `<span class="tag">${r.emoji} ${r.label}</span>` : '<span></span>'}<a class="btn small ${t ? 'ghost' : ''}" href="#/tryout/${a.id}">${t ? 'Try again' : 'Try a demo'}</a></div>
+        </article>`;
+      }).join('')}</div></section>`;
+  }
+
   // ---------- landing (the hook) ----------
   routes.welcome = {
     html: () => {
       const back = S.profile && S.personality;
-      const c0 = P.shuffle(D.CAREERS)[0];
       return `
       <section class="landing">
-        <p class="eyebrow">${back ? `Welcome back, ${esc(S.profile.name)}` : 'Career planning for students'}</p>
-        <h1>I want to be<br><span class="rotator" id="rot">${article(c0.title)} ${esc(c0.title)} ${c0.emoji}</span></h1>
-        <p class="sub">${back ? 'Pick up where you left off.' : 'Explore careers that fit your interests, then build a practical plan for classes, activities, and skills.'}</p>
-        <a class="btn big" href="#/${back ? (S.careerId ? 'today' : 'reveal') : 'start'}">${back ? 'Continue →' : 'Find my career →'}</a>
-        <p class="fine">${back ? '' : 'About 2 minutes · Free · No account required'}</p>
+        <p class="eyebrow">${back ? `Welcome back, ${esc(S.profile.name)}` : 'Career exploration and experience'}</p>
+        <h1>Find what interests you.<br><span class="grad">Build experience beyond school.</span></h1>
+        <p class="sub">${back ? 'Pick up where you left off.' : 'Explore what interests you, try real after-school activities, and build experience you can show on a resume.'}</p>
+        <p class="daily-quote">“${dailyQuote()}”</p>
+        <a class="btn big" href="#/${back ? (S.careerId ? 'today' : 'reveal') : 'start'}">${back ? 'Continue →' : 'Start personality assessment →'}</a>
+        <p class="fine">${back ? '' : 'About 3 minutes · Free · No account required'}</p>
       </section>`;
     },
-    bind: () => {
-      const el = $('#rot');
-      const order = P.shuffle(D.CAREERS);
-      let i = 0;
-      timers.push(setInterval(() => {
-        el.classList.add('out');
-        setTimeout(() => { const c = order[++i % order.length]; el.textContent = `${article(c.title)} ${c.title} ${c.emoji}`; el.classList.remove('out'); }, 260);
-      }, 2000));
-    },
+  };
+
+  routes.founders = {
+    html: () => `
+      <section class="founders-page">
+        <p class="eyebrow">Why we started Pathfinder</p>
+        <h1>Meet the founders</h1>
+        <p class="founders-lede">What if the hardest part of building your future wasn’t figuring out what to do, but simply knowing where to start?</p>
+        <div class="founder-list">
+          <article class="founder-story">
+            <p class="eyebrow">Co-founder</p>
+            <h2>Sruthi</h2>
+            <p>Hi, I’m Sruthi, co-creator of Pathfinder, and I believe every student deserves the opportunity to discover what they’re capable of becoming.</p>
+            <p>Think about being a student who wants to get into a great college or pursue a dream career, but has no idea what to put on a resume. You might wonder which extracurriculars matter, what skills you should develop, or how to gain experience when every opportunity seems to require experience in the first place. You know you should be preparing for your future, but no one has given you a clear roadmap to get there.</p>
+            <p>That’s the problem we wanted to solve.</p>
+          </article>
+          <article class="founder-story">
+            <p class="eyebrow">Co-founder · Grade 8</p>
+            <h2>Pahal Tharad</h2>
+            <p>Ever since I started middle school, I’ve been asked, “What do you want to be when you grow up?” The question has only gotten louder as I’ve reached eighth grade and people say, “High school is almost here!”</p>
+            <p>I’m Pahal Tharad, a 13-year-old eighth grader. Figuring out what I want to do—and how to get there—has always been difficult. When I was younger, I wanted to be an actor or singer. As I got older, I considered scientist, doctor, or teacher. Those are all great paths, but even “teacher” can mean many different things: math, science, or ELA; elementary, middle, or high school.</p>
+            <p>I took a lot of personality tests hoping they would help. They often felt long, boring, and inaccurate. We built Pathfinder to address that disconnect: turn long-term career ideas into adaptive daily schedules, personalized practice, and real milestones like high school courses and competitions.</p>
+            <p>With AI-supported accountability to build stamina and rewards to help sustain motivation, our goal is to help students take ownership of their futures, one honest day at a time.</p>
+          </article>
+          <article class="founder-story">
+            <p class="eyebrow">Co-developer</p>
+            <h2>Amrita</h2>
+            <p>Hello! I’m Amrita, one of the co-developers of Pathfinder. Like many students, I’m still trying to figure out what I want to be when I grow up. With so many careers, fields, and opportunities to explore, choosing a future path can feel overwhelming. The question of what I want to pursue keeps lingering, and I can feel caught between endless possibilities and the uncertainty of finding something that truly feels right for me.</p>
+            <p>This uncertainty inspired me to become part of Pathfinder. I wanted to help create a tool that lets students like me explore our interests, discover new possibilities, and find careers we may never have considered. Figuring out your future shouldn’t feel like a decision you have to make all at once. It can be a journey of exploration and self-discovery.</p>
+            <p>Through Pathfinder, I hope to make that journey a little less overwhelming and a lot more exciting, giving students the resources and confidence to take their first steps toward a future that feels right for them. You don’t need to have everything figured out to start finding your way.</p>
+          </article>
+        </div>
+        <div class="row center"><a class="btn big" href="#/start">Explore your path</a></div>
+      </section>`,
   };
 
   // ---------- quick start: one question at a time ----------
   let ob = null;
-  let revealFresh = false;
-  const OB_STEPS = ['name', 'grade', 'interests', 'subjects', 'quiz'];
-  const OB_QUIZ = 12;
-  const FACES = [['1', 'Not me'], ['2', 'A little'], ['3', 'Sometimes'], ['4', 'Mostly'], ['5', 'Totally me']];
+  const OB_STEPS = ['quiz', 'name', 'grade', 'interests', 'subjects'];
+  const OB_QUIZ = D.QUESTIONS.length;
+
+  function shuffledOptionOrder() {
+    return D.QUESTIONS.map((question) => {
+      const order = question.options.map((_, index) => index);
+      for (let index = order.length - 1; index > 0; index--) {
+        const swap = Math.floor(Math.random() * (index + 1));
+        [order[index], order[swap]] = [order[swap], order[index]];
+      }
+      return order;
+    });
+  }
 
   function obInit(params) {
     const p = S.profile;
-    const toQuiz = p && (!S.personality || params.step === 'quiz');
-    ob = { step: toQuiz ? 'quiz' : 'name', qi: 0, answers: {}, name: p ? p.name : '', grade: p ? String(p.grade) : '', picks: p && p.picks ? p.picks.slice() : [], subjects: p ? p.subjects.slice() : [] };
+    const requestedRetake = !!(p && S.personality && params.step === 'quiz');
+    const resumeDraft = !!S.quizDraft && (!requestedRetake || S.quizDraft.retake);
+    const hasOrder = resumeDraft && Array.isArray(S.quizDraft.optionOrder) &&
+      S.quizDraft.optionOrder.length === D.QUESTIONS.length &&
+      S.quizDraft.optionOrder.every((order, index) => Array.isArray(order) && order.length === D.QUESTIONS[index].options.length);
+    if (!resumeDraft || !hasOrder) {
+      S.quizDraft = {
+        retake: resumeDraft ? S.quizDraft.retake : requestedRetake,
+        answers: resumeDraft ? S.quizDraft.answers : {},
+        optionOrder: shuffledOptionOrder(),
+      };
+      save();
+    }
+    const retake = !!S.quizDraft.retake;
+    ob = { step: !S.personality || retake ? 'quiz' : 'name', retake, qi: 0, answers: Object.assign({}, S.quizDraft.answers), name: p ? p.name : '', grade: p ? String(p.grade) : '', picks: p && p.picks ? p.picks.slice() : [], subjects: p && p.subjects ? p.subjects.slice() : [] };
   }
 
   function subjectChips(grade, selected) {
@@ -449,11 +554,17 @@
     const box = $('#ob');
     if (!box || !ob) return;
     const si = OB_STEPS.indexOf(ob.step);
-    const done = ob.step === 'quiz' ? 4 + ob.qi : si;
-    const pct = Math.round((done / (4 + OB_QUIZ)) * 100);
-    const back = () => { const k = OB_STEPS.indexOf(ob.step); if (ob.step === 'quiz' && ob.qi > 0) ob.qi--; else if (k > 0) { ob.step = OB_STEPS[k - 1]; } drawStart(); };
+    const done = ob.step === 'quiz' ? ob.qi : OB_QUIZ + si - 1;
+    const pct = Math.round((done / (OB_QUIZ + 4)) * 100);
+    const back = () => {
+      const k = OB_STEPS.indexOf(ob.step);
+      if (ob.step === 'quiz' && ob.qi > 0) ob.qi--;
+      else if (ob.step === 'name' && !ob.retake) { ob.step = 'quiz'; ob.qi = OB_QUIZ - 1; }
+      else if (k > 0) ob.step = OB_STEPS[k - 1];
+      drawStart();
+    };
     const shell = (say, inner, foot) => `
-      <div class="ob-top"><button class="ob-back" id="ob-back" ${ob.step === 'name' ? 'hidden' : ''} aria-label="Back">←</button><div class="progress"><div style="width:${pct}%"></div></div></div>
+      <div class="ob-top"><button class="ob-back" id="ob-back" ${ob.step === 'quiz' || ob.step === 'name' ? 'hidden' : ''} aria-label="Back">←</button><div class="progress"><div style="width:${pct}%"></div></div></div>
       <p class="ob-context">${esc(say.t)}</p>
       ${inner}${foot ? `<div class="ob-foot">${foot}</div>` : ''}`;
     const bindBack = () => { const b = $('#ob-back'); if (b && !b.hidden) b.addEventListener('click', back); };
@@ -494,32 +605,50 @@
         `<small class="muted">Optional</small><button class="btn big" id="ob-next">Continue →</button>`);
       $('#ob-next').addEventListener('click', () => {
         ob.subjects = $$('#subj input:checked').map((i) => i.value);
-        obSaveProfile(); ob.step = 'quiz'; ob.qi = 0; drawStart();
+        obSaveProfile(); obFinish();
       });
     } else {
       const q = D.QUESTIONS[ob.qi];
-      const says = { 0: 'Answer based on what you usually enjoy, not what you think you should choose.', 5: 'You are halfway through the assessment.', 10: 'Three questions remaining.', 11: 'This is the final question.' };
-      const say = says[ob.qi] || 'Choose the answer that best describes you.';
+      const say = 'Choose the option that feels closest to your first instinct. There are no right answers.';
+      const advance = () => {
+        if (ob.qi + 1 < OB_QUIZ) { ob.qi++; drawStart(); }
+        else if (ob.retake) obFinish();
+        else { ob.step = 'name'; drawStart(); }
+      };
+      const optionOrder = S.quizDraft.optionOrder[ob.qi];
       box.innerHTML = shell({ t: say },
-        `<p class="eyebrow">Question ${ob.qi + 1} of ${OB_QUIZ}</p><div class="statement">${esc(q.q)}</div>
-         <div class="faces">${FACES.map(([e, l], i) => `<button class="face ${ob.answers[ob.qi] === i + 1 ? 'sel' : ''}" data-v="${i + 1}"><span>${e}</span>${l}</button>`).join('')}</div>`);
+        `${ob.qi === 0 ? `<p class="daily-quote">“${dailyQuote()}”</p>` : ''}
+         <p class="eyebrow">Question ${ob.qi + 1} of ${OB_QUIZ}</p><div class="statement">${esc(q.q)}</div>
+        <div class="faces">${optionOrder.map((answerIndex) => `<button class="face ${ob.answers[ob.qi] === answerIndex ? 'sel' : ''}" data-v="${answerIndex}" aria-pressed="${ob.answers[ob.qi] === answerIndex}"><span>${esc(q.options[answerIndex].text)}</span></button>`).join('')}</div>
+         <div class="row quiz-nav"><button class="btn ghost" id="quiz-back" ${ob.qi === 0 ? 'disabled' : ''}>Back</button><button class="btn" id="quiz-next" ${Number.isInteger(ob.answers[ob.qi]) ? '' : 'disabled'}>${ob.qi === OB_QUIZ - 1 ? 'Finish assessment' : 'Next'}</button></div>`);
       $$('.face').forEach((b) => b.addEventListener('click', () => {
-        ob.answers[ob.qi] = Number(b.dataset.v); b.classList.add('sel');
-        setTimeout(() => { if (ob.qi + 1 < OB_QUIZ) { ob.qi++; drawStart(); } else obFinish(); }, 230);
+        ob.answers[ob.qi] = Number(b.dataset.v);
+        S.quizDraft = { retake: ob.retake, answers: Object.assign({}, ob.answers), optionOrder: S.quizDraft.optionOrder };
+        save();
+        $$('.face').forEach((option) => {
+          const selected = option === b;
+          option.classList.toggle('sel', selected);
+          option.setAttribute('aria-pressed', String(selected));
+        });
+        $('#quiz-next').disabled = false;
       }));
+      $('#quiz-back').addEventListener('click', () => { if (ob.qi > 0) { ob.qi--; drawStart(); } });
+      $('#quiz-next').addEventListener('click', () => { if (Number.isInteger(ob.answers[ob.qi])) advance(); });
     }
     bindBack();
   }
 
   function obFinish() {
+    const unanswered = D.QUESTIONS.findIndex((_, index) => !Number.isInteger(ob.answers[index]) || ob.answers[index] < 0 || ob.answers[index] > 5);
+    if (unanswered >= 0) { ob.qi = unanswered; ob.step = 'quiz'; drawStart(); return; }
     const box = $('#ob');
     box.innerHTML = `<div class="thinking"><h2>Building your career matches</h2><p class="muted">Comparing your answers, interests, and favorite subjects</p><div class="progress"><div id="think" style="width:0%;transition:width 1.6s ease-out"></div></div></div>`;
     requestAnimationFrame(() => requestAnimationFrame(() => { const t = $('#think'); if (t) t.style.width = '100%'; }));
     setTimeout(() => {
       const first = !S.personality;
-      S.personality = { answers: ob.answers, traits: traitScores(ob.answers), date: today() };
+      S.personality = { answers: ob.answers, dimensions: dimensionScores(ob.answers), date: today() };
+      S.quizDraft = null;
       if (first) addXP(50, 'Quick start');
-      revealFresh = true;
       checkBadges(); save();
       go('#/reveal');
     }, 1800);
@@ -541,18 +670,31 @@
 
   routes.reveal = {
     html: () => {
-      const tr = S.personality.traits;
-      const top = Object.entries(tr).sort((a, b) => b[1] - a[1]);
+      const dimensions = S.personality.dimensions || legacyDimensionScores(S.personality);
+      const top = Object.entries(dimensions).sort((a, b) => b[1] - a[1]);
       const matches = matchCareers();
       const m = matches[0], c = m.c;
       const mine = S.careerId === c.id;
-      const name = top.slice(0, 2).map(([t]) => D.TRAITS[t].name).join('–');
       return `
       <section class="revealpage">
         <p class="eyebrow">Your results</p>
-        <h1>You're a <span class="grad">${esc(name)}</span></h1>
-        <p class="muted">${esc(D.TRAITS[top[0][0]].desc)} ${esc(D.TRAITS[top[1][0]].desc)}</p>
-        <div class="traits">${top.slice(0, 3).map(([t, v]) => `<div class="trait-row"><span>${D.TRAITS[t].name}</span><div class="bar"><div style="width:${v}%"></div></div><small>${v}%</small></div>`).join('')}</div>
+        <h1>Your thinking patterns</h1>
+        <p class="muted">These are patterns across all 15 answers, not a fixed personality type or a prediction of your future.</p>
+        <section class="ikigai-result">
+          <p class="eyebrow">A framework for career fit</p>
+          <h2>Four parts of purpose</h2>
+          <p class="muted">Ikigai is a Japanese concept about a reason for being. The Venn is a reflection framework; your quiz scores come from the six thinking dimensions below.</p>
+          <div class="ikigai-venn" role="img" aria-label="Venn diagram: what you love, what people need, what you could be paid for, and what you are good at overlap around purpose">
+            <div class="venn-circle venn-love"><span>What you<br>love</span></div>
+            <div class="venn-circle venn-world"><span>What people<br>need</span></div>
+            <div class="venn-circle venn-good"><span>What you are<br>good at</span></div>
+            <div class="venn-circle venn-paid"><span>What you could<br>be paid for</span></div>
+            <b class="venn-center">Purpose</b>
+          </div>
+        </section>
+        <section class="workstyle-result"><p class="eyebrow">Your six dimensions</p><p class="muted small">Scores are normalized across 15 opportunities per dimension. Your strongest patterns are not exclusive; close secondary strengths matter too.</p>
+          <div class="dimension-grid">${top.map(([key, value], index) => `<article class="dimension-item ${index < 3 ? 'strong' : ''}"><div class="dimension-item-head"><b>${esc(D.DIMENSIONS[key].name)}</b><span>${value}%</span></div><p>${esc(D.DIMENSIONS[key].desc)}</p><div class="bar"><div style="width:${value}%"></div></div></article>`).join('')}</div>
+        </section>
         <div class="hero-card">
           <span class="match-badge">${m.score}% match</span>
           <span class="big-emoji">${c.emoji}</span>
@@ -566,25 +708,22 @@
         <h3>Also great for you</h3>
         <div class="mini-list">${matches.slice(1, 4).map((x) => `<a class="mini-career" href="#/career/${x.c.id}"><span class="emo">${x.c.emoji}</span><div class="grow"><b>${esc(x.c.title)}</b><small>${money(x.c.pay)} · ${x.c.growth == null ? 'Varies' : (x.c.growth > 0 ? '▲' : x.c.growth < 0 ? '▼' : '') + Math.abs(x.c.growth) + '% growth'}</small></div><span class="score">${x.score}%</span></a>`).join('')}</div>
         <div class="row center"><a class="btn ghost" href="#/explore">Browse all ${D.CAREERS.length} careers</a></div>
-        <div class="row center"><a class="link small" href="#/start?step=quiz">Retake the quiz</a></div>
+        <div class="row center"><a class="link small" href="#/start?step=quiz">Retake personality assessment</a></div>
       </section>`;
     },
-    bind: () => {
-      bindPick();
-      if (revealFresh) { revealFresh = false; setTimeout(confetti, 250); }
-    },
+    bind: () => bindPick(),
   };
 
   // ---------- explore: all careers + try-outs ----------
   routes.explore = {
     html: (arg, params) => {
       const tab = params.tab === 'tryouts' ? 'tryouts' : 'careers';
-      const tabs = `<div class="tabs"><a href="#/explore" class="${tab === 'careers' ? 'active' : ''}">Careers</a><a href="#/explore?tab=tryouts" class="${tab === 'tryouts' ? 'active' : ''}">Try-outs</a></div>`;
+      const tabs = `<div class="tabs"><a href="#/explore" class="${tab === 'careers' ? 'active' : ''}">Careers</a><a href="#/explore?tab=tryouts" class="${tab === 'tryouts' ? 'active' : ''}">Activities</a></div>`;
       if (tab === 'tryouts') {
         const { rec, other } = activityLists();
         const c = career();
-        return `<h1>Explore</h1>${tabs}
-          <p class="muted">Small taste-tests of clubs and activities, about 15–25 minutes each. No grades, no pressure. “Not for me” is a great answer too.</p>
+        return `<h1>Explore after-school activities</h1>${tabs}
+          <p class="muted">Try a short activity, find out what you enjoy, and discover clubs or programs you could join outside school.</p>
           <h3>${c ? `Good fits for ${article(c.title)} ${esc(c.title)}` : 'Good fits for your top matches'}</h3><div class="acts">${rec.map(actCard).join('')}</div>
           <h3>Something different</h3><div class="acts">${other.map(actCard).join('')}</div>`;
       }
@@ -596,7 +735,7 @@
         <div class="career-list" id="clist">${list.map((c) => `
           <a class="career-tile ${c.id === S.careerId ? 'chosen' : ''}" data-cat="${c.cat}" data-q="${esc((c.title + ' ' + c.keywords.join(' ')).toLowerCase())}" href="#/career/${c.id}">
             <div class="top"><span class="emo">${c.emoji}</span><h3>${esc(c.title)}</h3><span class="score">${score[c.id]}%</span></div>
-            <p>${esc(c.summary.split('. ')[0].replace(/\.$/, ''))}.</p>
+            <p>${esc(c.summary.split('. ')[0])}.</p>
             <div class="pill-row"><span class="tag">${money(c.pay)}${c.pay ? '/yr' : ''}</span>${c.growth != null ? `<span class="tag ${c.growth > 0 ? 'accent' : 'warn'}">${c.growth > 0 ? '▲' : c.growth < 0 ? '▼' : ''} ${Math.abs(c.growth)}% growth</span>` : ''}${c.usn ? `<span class="tag">🏅 U.S. News #${c.usn}</span>` : ''}${c.id === S.careerId ? '<span class="tag accent">Your path</span>' : ''}</div>
           </a>`).join('')}</div>
         <p class="source">Pay: median annual pay (May 2025). Growth: projected 2025–2035. Source: U.S. Bureau of Labor Statistics, Occupational Outlook Handbook. “U.S. News” = rank in U.S. News &amp; World Report's 2026 Best Jobs. Percent match is Pathfinder's own estimate from your quiz.</p>`;
@@ -627,6 +766,8 @@
       <h3>Skills to build</h3><div class="pill-row" style="margin-bottom:16px">${c.skills.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>
       ${m && m.reasons.length ? `<h3>Why it fits you</h3><ul class="bullets">${m.reasons.map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}
       <h3>Education</h3><p>${esc(c.edu || '')}</p>
+      ${careerActivitiesHTML(c)}
+      ${collegeGuideHTML(c)}
       <h3>Competitions to aim for</h3><div class="pill-row">${c.competitions.map((x) => `<span class="tag">🏅 ${esc(x)}</span>`).join('')}</div>
       <div class="sticky-cta"><button class="btn big block" data-pick="${c.id}">${mine ? 'This is your path ✓' : 'Choose this path'}</button></div>
       <p class="source">Pay and growth: U.S. Bureau of Labor Statistics (median pay, May 2025; projected growth 2025–35). Ranking: U.S. News &amp; World Report 2026 Best Jobs.</p>`;
@@ -820,6 +961,7 @@
       const lv = level(), into = S.xp % 250;
       return `
       <div class="today-head"><p class="eyebrow">Day ${daysBetween(S.plan.start, t) + 1} · becoming ${article(c.title)} ${esc(c.title)} ${c.emoji}</p><h1>${hello}, ${esc(S.profile.name)}</h1></div>
+      <p class="daily-quote">“${dailyQuote()}”</p>
       ${progressStrip()}
       ${left ? `<h2>Today's steps <small class="muted">${day.tasks.length - left} of ${day.tasks.length} done</small></h2>` : ''}
       ${left ? `<ol class="steps">${stepsHTML(day)}</ol>` : `
@@ -932,7 +1074,7 @@
     box.innerHTML = taskForm(f.task);
     bindTaskForm(box, (v) => {
       Object.assign(f.task, v);
-      if (v.type === 'reflect' && !f.task.prompt) f.task.prompt = fillCareer(D.REFLECT_PROMPTS[0], career().title);
+      if (v.type === 'reflect' && !f.task.prompt) f.task.prompt = D.REFLECT_PROMPTS[0].replace(/\{career\}/g, career().title);
       f.day.edited = true; save(); render();
     });
   }
@@ -1092,7 +1234,6 @@
             if (sw > 2) integrity(-Math.min(10, (sw - 2) * 2), `${sw} distractions during a focus session`);
             if (sw === 0 && f.task.minutes >= 25) award('deep-focus');
             completeTask(f.task.id, 'timer', { minutes: f.task.minutes, switches: sw }, f.task.minutes * 1.2 + (sw === 0 ? 10 : 0), sw === 0 ? 'Distraction-free focus' : 'Focus session');
-            confetti();
             go('#/today');
           }
         }, 250);
@@ -1111,6 +1252,7 @@
       <div class="me-head"><div><h1>${esc(S.profile.name)}</h1><p class="muted" style="margin:0">Level ${lv} · ${levelTitle(lv)}${c ? ` · future ${esc(c.title)}` : ''}</p></div></div>
       <div class="bar"><div style="width:${(into / 250) * 100}%"></div></div><small class="muted">${250 - into} XP to Level ${lv + 1}</small>
       <div class="statgrid"><div><b>${streak()}</b><small>day streak</small></div><div><b>${S.xp}</b><small>total XP</small></div><div><b>${S.coins}</b><small>coins</small></div></div>
+      <div class="row start profile-actions"><a class="link" href="#/start?step=quiz">Retake personality assessment</a><a class="link" href="#/portfolio">View resume portfolio</a></div>
       ${c ? `<div class="card"><h3>Your skills</h3>${c.domains.map((d) => { const s = skill(d); return `<div class="skill"><span>${D.DOMAINS[d].emoji} ${D.DOMAINS[d].name}<small class="muted"> ${isPlaced(d) ? levelName(s.level) : ''}</small></span><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= s.level ? 'on' : ''}"></i>`).join('')}</span></div>`; }).join('')}</div>` : ''}
       <h2>Badges <small class="muted">${Object.keys(S.badges).length} of ${D.BADGES.length}</small></h2>
       <div class="badges" style="margin-bottom:28px">${D.BADGES.map((b) => `
@@ -1130,13 +1272,13 @@
         <ul class="log">${S.integrity.log.slice(0, 8).map((l) => `<li><span class="${l.delta < 0 ? 'bad' : 'ok'}">${l.delta > 0 ? '+' : ''}${l.delta}</span> ${esc(l.msg)} <small class="muted">${prettyDate(l.date)}</small></li>`).join('') || '<li class="muted small">No events yet. Keep it clean! ✨</li>'}</ul></div></details>
       <details class="fold"><summary>⚙️ Settings</summary><div>
         <label class="toggle"><input type="checkbox" id="demo" ${S.settings.demo ? 'checked' : ''}> Demo mode (focus timers run 60× faster, for trying the app)</label>
-        <div class="row start" style="gap:18px"><a href="#/profile" class="link">Edit my profile</a><a href="#/start?step=quiz" class="link">Retake the quiz</a><button class="link danger" id="reset">Reset all data</button></div></div></details>`;
+        <div class="row start" style="gap:18px"><a href="#/profile" class="link">Edit my profile</a><button class="link danger" id="reset">Reset all data</button></div></div></details>`;
     },
     bind: () => {
       $$('[data-redeem]').forEach((b) => b.addEventListener('click', () => {
         const r = S.rewards.find((x) => x.id === b.dataset.redeem);
         if (S.coins < r.cost || !confirm(`Redeem "${r.name}" for ${r.cost} coins?`)) return;
-        S.coins -= r.cost; r.redeemed = today(); save(); confetti(); toast(`🎁 Enjoy: ${esc(r.name)}!`, 'big'); render();
+        S.coins -= r.cost; r.redeemed = today(); save(); toast(`Prize redeemed: ${esc(r.name)}`, 'big'); render();
       }));
       $$('[data-rmreward]').forEach((b) => b.addEventListener('click', () => { S.rewards = S.rewards.filter((x) => x.id !== b.dataset.rmreward); save(); render(); }));
       $('#reward-form').addEventListener('submit', (e) => {
@@ -1147,7 +1289,116 @@
       $('#demo').addEventListener('change', (e) => { S.settings.demo = e.target.checked; save(); });
       $('#reset').addEventListener('click', () => {
         if (!confirm('Erase all Pathfinder data on this device? This cannot be undone.')) return;
-        S = blank(); save(); location.hash = '#/welcome'; render();
+        S = blank(); save(); location.hash = '#/start'; render();
+      });
+    },
+  };
+
+  function portfolioEntries() {
+    const entries = (S.portfolio || []).map((entry) => Object.assign({ source: 'student' }, entry));
+    for (const [date, day] of Object.entries(S.plan ? S.plan.days : {})) {
+      for (const task of day.tasks) {
+        if (task.type !== 'milestone' || task.status !== 'done' || !task.result || !task.result.note) continue;
+        entries.push({
+          id: `milestone-${task.id}`, category: 'Roadmap milestone', title: task.title,
+          organization: 'Pathfinder career plan', date, skills: [], description: task.result.note,
+          verifier: task.result.verifier, source: 'milestone',
+        });
+      }
+    }
+    return entries.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  }
+
+  function resumeDraft(entries) {
+    const interests = [S.profile.hobbies, S.profile.interests].filter(Boolean).join(', ');
+    const subjects = (S.profile.subjects || []).join(', ');
+    const lines = [S.profile.name, `Grade ${S.profile.grade} student`, '', 'PROFILE'];
+    if (S.careerId) lines.push(`Career interest: ${career().title}`);
+    if (interests) lines.push(`Interests: ${interests}`);
+    if (subjects) lines.push(`Favorite subjects: ${subjects}`);
+    lines.push('', 'EXPERIENCE');
+    entries.forEach((entry) => {
+      const when = entry.date ? prettyDate(entry.date) : '';
+      lines.push('', `${entry.category}: ${entry.title}${entry.organization ? ` | ${entry.organization}` : ''}`);
+      if (when) lines.push(when);
+      if (entry.description) lines.push(entry.description);
+      if (entry.skills && entry.skills.length) lines.push(`Skills: ${entry.skills.join(', ')}`);
+      if (entry.verifier) lines.push(`Confirmed by: ${entry.verifier}`);
+    });
+    return lines.join('\n');
+  }
+
+  routes.portfolio = {
+    html: () => {
+      const entries = portfolioEntries();
+      const explored = D.ACTIVITIES.filter((activity) => S.tryouts[activity.id]);
+      const entryCard = (entry) => `
+        <article class="portfolio-entry">
+          <div class="portfolio-entry-head"><span class="tag">${esc(entry.category)}</span><small class="muted">${entry.date ? prettyDate(entry.date) : ''}</small></div>
+          <h3>${esc(entry.title)}</h3>
+          ${entry.organization ? `<p class="muted small">${esc(entry.organization)}</p>` : ''}
+          ${entry.description ? `<p>${esc(entry.description)}</p>` : ''}
+          ${entry.skills && entry.skills.length ? `<div class="pill-row">${entry.skills.map((item) => `<span class="tag">${esc(item)}</span>`).join('')}</div>` : ''}
+          <small class="muted">${entry.verifier ? `Confirmed by ${esc(entry.verifier)}` : entry.source === 'milestone' ? 'Self-reported milestone' : 'Student entry'}</small>
+          ${entry.source === 'student' ? `<button class="link danger" data-entry-remove="${esc(entry.id)}">Remove</button>` : ''}
+        </article>`;
+      return `
+        <header class="portfolio-head"><div><p class="eyebrow">Experience beyond the classroom</p><h1>My portfolio</h1><p class="muted">Keep track of projects, clubs, competitions, volunteering, and skills you build after school.</p></div>
+          <button class="btn" id="resume-download" ${entries.length ? '' : 'disabled'}>Download resume draft</button></header>
+        <p class="muted small">Your draft uses the details you enter here and completed roadmap milestones. Review everything for accuracy before sharing it.</p>
+        <section class="portfolio-section">
+          <h2>Add an experience</h2>
+          <form id="portfolio-form" class="form portfolio-form">
+            <label>Experience type<select name="category"><option>Project</option><option>Club or team</option><option>Competition</option><option>Volunteering</option><option>Part-time work</option><option>Course or certificate</option><option>Other</option></select></label>
+            <label>Title<input name="title" required maxlength="80" placeholder="e.g. Built a neighborhood air-quality dashboard"></label>
+            <label>Organization or context<input name="organization" maxlength="80" placeholder="e.g. Independent project, local library"></label>
+            <label>Date<input name="date" type="date" value="${today()}" required></label>
+            <label>Skills used<input name="skills" maxlength="120" placeholder="e.g. Python, data analysis, communication"></label>
+            <label>What did you do or learn?<textarea name="description" rows="3" required maxlength="500" placeholder="Describe your contribution and what you learned."></textarea></label>
+            <div><button class="btn" type="submit">Add to portfolio</button></div>
+          </form>
+        </section>
+        <section class="portfolio-section">
+          <div class="portfolio-section-head"><h2>Experience record</h2><span class="muted small">${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}</span></div>
+          ${entries.length ? `<div class="portfolio-list">${entries.map(entryCard).join('')}</div>` : '<p class="empty-state">Your experience will appear here as you add entries and complete roadmap milestones.</p>'}
+        </section>
+        <section class="portfolio-section">
+          <div class="portfolio-section-head"><h2>Activities explored</h2><span class="muted small">${explored.length} tried</span></div>
+          <p class="muted small">These are exploration notes, not resume credentials. Use them to notice what you want to pursue further.</p>
+          ${explored.length ? `<ul class="explored-list">${explored.map((activity) => {
+            const result = S.tryouts[activity.id];
+            const rating = D.RATINGS.find((item) => item.v === result.rating);
+            return `<li><span>${esc(activity.name)}</span><small>${prettyDate(result.date)} · ${rating ? esc(rating.label) : 'Tried'}</small></li>`;
+          }).join('')}</ul>` : '<p class="empty-state">Activities you try will be listed here to help you compare what you enjoy.</p>'}
+        </section>`;
+    },
+    bind: () => {
+      $('#portfolio-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const field = (name) => form.elements.namedItem(name).value;
+        if (!Array.isArray(S.portfolio)) S.portfolio = [];
+        S.portfolio.push({
+          id: uid(), category: field('category'), title: field('title').trim(),
+          organization: field('organization').trim(), date: field('date'),
+          skills: field('skills').split(',').map((item) => item.trim()).filter(Boolean),
+          description: field('description').trim(),
+        });
+        save(); render();
+      });
+      $$('[data-entry-remove]').forEach((button) => button.addEventListener('click', () => {
+        S.portfolio = S.portfolio.filter((entry) => entry.id !== button.dataset.entryRemove);
+        save(); render();
+      }));
+      $('#resume-download').addEventListener('click', () => {
+        const file = new Blob([resumeDraft(portfolioEntries())], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(file);
+        link.download = `${S.profile.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-resume-draft.txt`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
       });
     },
   };
@@ -1201,8 +1452,8 @@
     const answered = pl.answers.filter((a) => !a.unsure);
     const avg = answered.length ? answered.reduce((n, a) => n + a.t, 0) / answered.length : 99;
     if (answered.length >= 3 && avg < 2.5) {
-      box.innerHTML = `<div class="result"><div class="center-art"><span class="art">🧭</span></div><h2>That went fast!</h2>
-        <p>Answers that quick don't show us your real level. Take your time, and if you don't know one, choose “I'm not sure”. That's totally fine.</p>
+      box.innerHTML = `<div class="result"><h2>Take a little more time</h2>
+        <p>Those answers came too quickly to estimate your level accurately. Work through each question, or choose “I'm not sure” when needed.</p>
         <button class="btn" id="pl-redo">Redo this section</button></div>`;
       $('#pl-redo').addEventListener('click', () => { plStartDomain(pl); drawPlacement(); });
       return;
@@ -1224,7 +1475,6 @@
     checkBadges(); save(); renderNav('practice');
     box.innerHTML = `
       <div class="result">
-        <div class="center-art"><span class="art">🎉</span></div>
         <h2>Here's where you're starting</h2>
         <div class="levels-list">${p.domains.map((d) => `<div class="skill"><span>${D.DOMAINS[d].emoji} ${D.DOMAINS[d].name}<small class="muted"> ${levelName(p.results[d])}</small></span><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= p.results[d] ? 'on' : ''}"></i>`).join('')}</span></div>`).join('')}</div>
         <p class="muted">This isn't a grade. It just means practice starts in the right spot, and moves up as you grow. You can edit your schedule any time.</p>
@@ -1241,9 +1491,8 @@
       const doms = unplaced();
       return `
       <section class="card narrow quiz" id="quiz">
-        <div class="center-art"><span class="art">🧭</span></div>
-        <h2 class="center">Let's see where you're starting, ${esc(S.profile.name)}</h2>
-        <p>Before we plan anything, a quick skill check helps us start you in the right place. It's <b>${doms.length} short section${doms.length === 1 ? '' : 's'}</b> (${doms.map((d) => D.DOMAINS[d].name).join(', ')}), about ${doms.length * 2} minutes.</p>
+        <h2>Set your starting level</h2>
+        <p>This short, ungraded check helps set the right level for your practice. It includes <b>${doms.length} section${doms.length === 1 ? '' : 's'}</b> (${doms.map((d) => D.DOMAINS[d].name).join(', ')}), about ${doms.length * 2} minutes.</p>
         <ul class="checklist"><li>It's <b>not a grade</b>. There's no pass or fail.</li><li>Questions get easier or harder based on your answers.</li><li>Not sure? Choose “I'm not sure”. That's better than guessing.</li></ul>
         <div class="row center"><button class="btn big" id="sc-start">Start skill check</button></div>
         <p class="center small"><button class="link" id="sc-skip">Skip for now (we'll start you at a typical level for grade ${esc(S.profile.grade)})</button></p>
@@ -1269,14 +1518,14 @@
     const untried = activityLists().rec.filter((a) => !S.tryouts[a.id]);
     if (!untried.length) return '';
     const a = untried[daysBetween('2026-01-01', today()) % untried.length];
-    return `<div class="card try-card"><span class="act-emoji">${a.emoji}</span><div><small class="muted">Curious? No pressure.</small><b>${esc(a.name)}</b><small>${a.minutes}-minute taster</small><a class="link" href="#/tryout/${a.id}">Give it a try →</a></div></div>`;
+    return `<div class="card try-card"><span class="act-emoji">${a.emoji}</span><div><small class="muted">After-school activity</small><b>${esc(a.name)}</b><small>${a.minutes}-minute guided preview</small><a class="link" href="#/tryout/${a.id}">Explore this activity →</a></div></div>`;
   }
   function actCard(a) {
     const t = S.tryouts[a.id];
     const r = t && D.RATINGS.find((x) => x.v === t.rating);
     return `<article class="act">
       <div class="act-top"><span class="act-emoji">${a.emoji}</span><div><h3>${esc(a.name)}</h3><p class="muted">${esc(a.blurb)}</p></div></div>
-      <p class="small muted">⏱️ ${a.minutes}-min taster · ${esc(a.commit)}</p>
+      <p class="small muted">About ${a.minutes} minutes · Related clubs or programs: ${esc(a.commit)}</p>
       <div class="row">${r ? `<span class="tag">${r.emoji} ${r.label}</span>` : '<span></span>'}<a class="btn small ${t ? 'ghost' : ''}" href="#/tryout/${a.id}">${t ? 'Try again' : 'Try it'}</a></div>
     </article>`;
   }
@@ -1284,12 +1533,12 @@
   routes.tryout = {
     html: (id) => {
       const a = D.ACTIVITIES.find((x) => x.id === id);
-      if (!a) return `<section class="card narrow"><p>Activity not found.</p><a class="btn" href="#/explore">Back to try-outs</a></section>`;
+      if (!a) return `<section class="card narrow"><p>Activity not found.</p><a class="btn" href="#/explore?tab=tryouts">Back to activities</a></section>`;
       return `
       <section class="card narrow">
-        <a class="back" href="#/explore?tab=tryouts">← All try-outs</a>
-        <div class="act-top big"><span class="act-emoji">${a.emoji}</span><div><h2>${esc(a.name)} taster</h2><p class="muted">${esc(a.blurb)}</p></div></div>
-        <p class="small muted">⏱️ About ${a.minutes} minutes · Real clubs: ${esc(a.commit)}</p>
+        <a class="back" href="#/explore?tab=tryouts">← All activities</a>
+        <div class="act-top big"><span class="act-emoji">${a.emoji}</span><div><h2>${esc(a.name)} preview</h2><p class="muted">${esc(a.blurb)}</p></div></div>
+        <p class="small muted">About ${a.minutes} minutes · Related clubs or programs: ${esc(a.commit)}</p>
         <ol class="trysteps">${a.steps.map((st, i) => `
           <li class="trystep" data-i="${i}"><b>Step ${i + 1}</b><p>${esc(st.t)}</p>
             ${st.w ? `<textarea rows="3" placeholder="Write a few words…"></textarea><div class="row"><small class="muted">A few words is plenty.</small><button class="btn small" data-done>Done</button></div>`
@@ -1332,14 +1581,14 @@
         const c = career();
         const onPath = c && a.careers.includes(c.id);
         const msg = rating >= 3
-          ? `Sounds like it could be a fit! ${esc(a.join)}`
+          ? `This may be worth exploring further. ${esc(a.join)}`
           : rating === 2 ? "That's okay, it's fine to be unsure. Try it again another day, or try something different."
           : "Totally fine! Knowing what's <i>not</i> for you is just as useful. Try something different.";
         const out = $('#try-out');
         $('#rate').hidden = true;
         out.hidden = false;
-        out.innerHTML = `<div class="center-art"><span class="art">${rating >= 3 ? '🎉' : '🙂'}</span></div>
-          <h3 class="center">${D.RATINGS.find((r) => r.v === rating).emoji} Thanks for trying it!</h3>
+        out.innerHTML = `<h3>${D.RATINGS.find((r) => r.v === rating).label}</h3>
+          <p class="muted">Your reaction helps refine your career matches.</p>
           <p>${msg}</p>
           ${rating >= 3 && !onPath ? `<p class="adapt">This one isn't on your ${c ? esc(c.title) : 'current'} path, but pay attention to what you enjoy. Interests can point to new careers. <a href="#/reveal">See if your matches changed →</a></p>` : ''}
           <div class="row center">
@@ -1420,14 +1669,14 @@
       const readSecs = (lq.shownAt - lq.opened) / 1000 - 8; // rough time before the check began
       const skimmed = (Date.now() - lq.opened) / 1000 < 25;
       completeTask(lq.id, 'auto', { correct: lq.correct, of: lq.qs.length }, (12 + lq.correct * 4) * (skimmed ? 0.4 : 1), 'Lesson');
-      box.innerHTML = `<div class="result"><div class="center-art"><span class="art">🎉</span></div>
-        <h2>${lq.correct === 3 ? 'You got it! 🌟' : 'Nice, that clicked! 👍'}</h2>
-        <p>${lq.correct}/${lq.qs.length} on the check.${skimmed ? ' (That was quick. If it felt too easy, your next lessons will move up as you practice.)' : ''} Now the practice will make sense.</p>
+      box.innerHTML = `<div class="result">
+        <h2>Lesson complete</h2>
+        <p>${lq.correct}/${lq.qs.length} correct.${skimmed ? ' If the material felt too easy, future lessons will adjust as you practice.' : ''} The related practice is now available.</p>
         <div class="row center"><a class="btn big" href="#/today">Continue →</a></div></div>`;
     } else {
       t.fails = (t.fails || 0) + 1; save();
-      box.innerHTML = `<div class="result"><div class="center-art"><span class="art">🙂</span></div>
-        <h2>Let's read it once more</h2>
+      box.innerHTML = `<div class="result">
+        <h2>Review before practicing</h2>
         <p>${lq.correct}/${lq.qs.length}. That's okay! The check is just to make sure it clicked before practice. Read the lesson again and try fresh questions.</p>
         <div class="row center"><button class="btn" id="reread">Read the lesson again</button>
         ${t.fails >= 2 && lq.tier > 1 ? `<button class="btn ghost" id="easier">Try an easier lesson</button>` : ''}</div></div>`;
@@ -1607,18 +1856,17 @@
     else { addXP(xp * 0.6, 'Python practice'); checkBadges(); }
     save(); renderNav('code');
     const next = cs.taskId ? '<a class="btn big" href="#/today">Back to today →</a>' : '<a class="btn big" href="#/code">Next exercise →</a>';
-    res.innerHTML = `<div class="result-box ok-box"><div class="center-art"><span class="art">🎉</span></div>
-      <h3 class="center">All tests passed! 🎉</h3>
+    res.innerHTML = `<div class="result-box ok-box">
+      <h3 class="center">All tests passed</h3>
       <p class="center">${cs.sol ? 'Nice work typing it out. Next time you will write it yourself.' : cs.runs === 1 ? 'First try!' : `Solved in ${cs.runs} runs. Debugging is the real skill.`}${note ? '<br><b>' + esc(note) + '</b>' : ''}</p>
       <ul class="tests">${rows}</ul>${printed}
       <details><summary>See a reference solution</summary><pre class="example">${esc(ex.solution)}</pre></details>
       <div class="row center">${next}</div></div>`;
-    confetti();
   }
 
   window.addEventListener('hashchange', render);
   window.addEventListener('DOMContentLoaded', render);
 
   // Exposed for automated tests.
-  window.PF_APP = { checkReflection: (t, m) => checkReflection(t, m || {}), traitScores, state: () => S };
+  window.PF_APP = { checkReflection: (t, m) => checkReflection(t, m || {}), dimensionScores, state: () => S };
 })();

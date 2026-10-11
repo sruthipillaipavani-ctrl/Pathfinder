@@ -202,6 +202,150 @@
 
   EXTRA.forEach((c) => { if (!c.tasks) c.tasks = []; D.CAREERS.push(c); });
 
+  const COLLEGE_GUIDES = {
+    computing: {
+      program: 'Computer science, data science, information systems, cybersecurity, or game development.',
+      reach: ['Carnegie Mellon University', 'Massachusetts Institute of Technology'],
+      target: ['Purdue University', 'University of Maryland'],
+      likely: ['Iowa State University', 'Arizona State University'],
+    },
+    engineering: {
+      program: 'Mechanical or civil engineering; check for ABET-accredited programs.',
+      reach: ['Georgia Institute of Technology', 'Massachusetts Institute of Technology'],
+      target: ['Purdue University', 'Virginia Tech'],
+      likely: ['Oregon State University', 'Michigan Technological University'],
+    },
+    architecture: {
+      program: 'Architecture; compare accredited professional degree paths, portfolios, and total program length.',
+      reach: ['Cornell University', 'Rice University'],
+      target: ['Syracuse University', 'Iowa State University'],
+      likely: ['Ball State University', 'University of Arizona'],
+    },
+    prehealth: {
+      program: 'An undergraduate major with pre-health advising. Medical and physician-assistant programs come after college and have separate admissions.',
+      reach: ['Johns Hopkins University', 'Duke University'],
+      target: ['Case Western Reserve University', 'University of Rochester'],
+      likely: ['University of Iowa', 'University of Arizona'],
+    },
+    nursing: {
+      program: 'Nursing (BSN) or an associate-degree RN route. Compare clinical placements, licensing outcomes, and cost.',
+      reach: ['University of Pennsylvania', 'University of California, Los Angeles'],
+      target: ['University of Minnesota Twin Cities', 'The Ohio State University'],
+      likely: ['University of Iowa', 'Arizona State University'],
+    },
+    alliedHealth: {
+      program: 'A related undergraduate major and required graduate training for speech-language pathology, occupational therapy, physical therapy, or athletic training.',
+      reach: ['Boston University', 'University of Southern California'],
+      target: ['University of Washington', 'University of Iowa'],
+      likely: ['University of Kansas', 'University of North Dakota'],
+    },
+    veterinary: {
+      program: 'Undergraduate animal science or biology with pre-veterinary advising. A DVM is a later professional degree with its own competitive admissions.',
+      reach: ['University of California, Davis', 'Cornell University'],
+      target: ['Purdue University', 'The Ohio State University'],
+      likely: ['Iowa State University', 'Kansas State University'],
+    },
+    dental: {
+      program: 'Undergraduate study with pre-dental advising; DDS/DMD programs are graduate professional schools.',
+      reach: ['University of Michigan', 'University of California, Los Angeles'],
+      target: ['The Ohio State University', 'University of Iowa'],
+      likely: ['University of Kansas', 'Arizona State University'],
+    },
+    business: {
+      program: 'Business, finance, marketing, or health administration. Entrepreneurship can also be pursued without a degree.',
+      reach: ['University of Pennsylvania (Wharton)', 'New York University (Stern)'],
+      target: ['Indiana University Bloomington (Kelley)', 'University of Wisconsin–Madison'],
+      likely: ['University of Iowa (Tippie)', 'Arizona State University (W. P. Carey)'],
+    },
+    actuarial: {
+      program: 'Actuarial science, statistics, or mathematics; compare exam preparation and internship support.',
+      reach: ['University of Michigan', 'University of Wisconsin–Madison'],
+      target: ['Pennsylvania State University', 'University of Nebraska–Lincoln'],
+      likely: ['Iowa State University', 'Illinois State University'],
+    },
+    environmental: {
+      program: 'Environmental science, ecology, or a related science; look for field research and internship opportunities.',
+      reach: ['University of California, Berkeley', 'Cornell University'],
+      target: ['University of California, Davis', 'Colorado State University'],
+      likely: ['Oregon State University', 'University of Arizona'],
+    },
+    education: {
+      program: 'Teacher preparation in the subject and grade band you want to teach. Licensure requirements vary by state.',
+      reach: ['Vanderbilt University', 'University of Michigan'],
+      target: ['University of Wisconsin–Madison', 'University of Oregon'],
+      likely: ['Arizona State University', 'University of Iowa'],
+    },
+    prelaw: {
+      program: 'Any undergraduate major can lead to law school; build reading, writing, research, and debate skills. A JD is a later graduate degree.',
+      reach: ['Georgetown University', 'University of Michigan'],
+      target: ['American University', 'University of Wisconsin–Madison'],
+      likely: ['University of Iowa', 'University of Arizona'],
+    },
+    psychology: {
+      program: 'Psychology or neuroscience. Many psychologist roles require graduate study, supervised experience, and state licensure.',
+      reach: ['Stanford University', 'University of California, Los Angeles'],
+      target: ['University of Wisconsin–Madison', 'University of Minnesota Twin Cities'],
+      likely: ['University of Arizona', 'University of Iowa'],
+    },
+    design: {
+      program: 'Graphic, communication, or interaction design; compare portfolio expectations and internship access.',
+      reach: ['Rhode Island School of Design', 'Carnegie Mellon University'],
+      target: ['Savannah College of Art and Design', 'Pratt Institute'],
+      likely: ['Columbia College Chicago', 'Iowa State University'],
+    },
+    media: {
+      program: 'Journalism, film, or media production; build a portfolio and check the equipment and newsroom access available to students.',
+      reach: ['Northwestern University (Medill)', 'University of Southern California'],
+      target: ['Syracuse University (Newhouse)', 'University of Missouri'],
+      likely: ['Temple University', 'University of Iowa'],
+    },
+    aviation: {
+      program: 'Aviation or professional flight training. Compare FAA approvals, flight-hour costs, medical requirements, and non-college flight-school routes.',
+      reach: ['Purdue University', 'Embry-Riddle Aeronautical University'],
+      target: ['University of North Dakota', 'Western Michigan University'],
+      likely: ['Kansas State University', 'University of Oklahoma'],
+    },
+    apprenticeship: {
+      type: 'apprenticeship',
+      program: 'A four-year college degree is not required for many electrician roles. Compare paid registered apprenticeships, community-college electrical technology programs, and trade schools in your area.',
+      routes: ['Local IBEW or IEC apprenticeship programs', 'State-registered apprenticeship directory', 'Community college or technical-school electrical programs'],
+    },
+  };
+
+  const COLLEGE_TRACKS = {
+    'data-scientist': 'computing', 'software-engineer': 'computing', 'it-manager': 'computing',
+    cybersecurity: 'computing', 'web-developer': 'computing', 'game-developer': 'computing',
+    'mech-engineer': 'engineering', 'civil-engineer': 'engineering', architect: 'architecture',
+    physician: 'prehealth', 'physician-assistant': 'prehealth',
+    nurse: 'nursing', 'nurse-practitioner': 'nursing',
+    'speech-pathologist': 'alliedHealth', 'occupational-therapist': 'alliedHealth',
+    'physical-therapist': 'alliedHealth', 'athletic-trainer': 'alliedHealth',
+    veterinarian: 'veterinary', dentist: 'dental',
+    entrepreneur: 'business', 'financial-analyst': 'business', 'financial-manager': 'business',
+    'marketing-manager': 'business', 'health-services-manager': 'business',
+    actuary: 'actuarial', 'env-scientist': 'environmental', teacher: 'education',
+    lawyer: 'prelaw', psychologist: 'psychology', 'graphic-designer': 'design',
+    journalist: 'media', 'video-producer': 'media', pilot: 'aviation', electrician: 'apprenticeship',
+  };
+
+  const COMMUNITY_IMPACT = {
+    physician: 96, 'physician-assistant': 94, 'nurse-practitioner': 94, nurse: 93,
+    'speech-pathologist': 94, 'occupational-therapist': 94, 'physical-therapist': 92,
+    psychologist: 94, 'env-scientist': 96, teacher: 94, lawyer: 88, journalist: 86,
+    veterinarian: 91, dentist: 88, 'athletic-trainer': 88, 'health-services-manager': 88,
+    electrician: 82, 'civil-engineer': 88, architect: 84, 'mech-engineer': 78,
+    'data-scientist': 76, 'cybersecurity': 82, 'financial-analyst': 66,
+    'financial-manager': 66, actuary: 70, entrepreneur: 78, 'marketing-manager': 68,
+    'graphic-designer': 72, 'video-producer': 72, 'game-developer': 70,
+  };
+  const CATEGORY_IMPACT = { health: 90, people: 84, science: 82, build: 74, tech: 70, creative: 70, business: 64 };
+
+  D.CAREERS.forEach((career) => {
+    const guide = COLLEGE_GUIDES[COLLEGE_TRACKS[career.id]];
+    if (guide) career.collegeGuide = guide;
+    career.communityImpactFit = COMMUNITY_IMPACT[career.id] || CATEGORY_IMPACT[career.cat] || 65;
+  });
+
   // Tap-to-pick interests for the quick start. `kw` words feed career matching.
   D.INTEREST_TILES = [
     { id: 'gaming', emoji: '🎮', label: 'Video games', kw: ['gaming', 'games', 'video games'] },

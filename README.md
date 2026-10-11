@@ -1,21 +1,26 @@
 # Pathfinder
 
-Pathfinder helps middle and high school students (grades 6–12) discover careers that fit them, then turns that into a real, level-appropriate plan they can follow a little each day.
+Pathfinder helps middle and high school students (grades 6–12) explore what they enjoy, try meaningful after-school activities, and build experience they can document for future applications and resumes.
 
 ## The flow
 
-1. **Quick start (about 2 minutes, no account).** One question per screen: name → grade → tap what you love → favorite subjects → 12 one-tap personality questions.
-2. **Results.** A personality result (e.g. *Thinker–Organizer*) and your #1 career match with real pay, job growth, and education, plus two runners-up.
-3. **Explore.** Search and filter **34 careers** (health, tech, business, engineering & trades, creative, science, people) with a detail page for each. A second tab offers **try-outs**: short, optional tasters of 17 extracurriculars (robotics, debate, coding club, HOSA, DECA…).
+1. **Quick start (about 3 minutes, no account).** Answer all 15 scenario questions, each with six choices mapped privately to one of six thinking dimensions. Choices are shuffled once per attempt and stay in the same order while navigating. Back/Next saves answers, and Next requires a choice. Then add a name, grade, interests, and favorite subjects. This is an exploratory tool, not a psychological diagnosis. Returning students can retake it without losing their portfolio or progress.
+2. **Results.** Scores normalize each of the six thinking dimensions across 15 questions (15 opportunities per dimension). The highest-scoring career is recommended using those dimension scores plus interests, subjects, goals, and tried activities. The ranking is deterministic; students can compare other matches before choosing.
+3. **Explore.** Search and filter **34 careers** (health, tech, business, engineering & trades, creative, science, people) with a detail page for each. A second tab offers short tasters of 17 after-school activities (robotics, debate, coding club, HOSA, DECA…) to help students discover what they want to pursue.
 4. **Skill check.** Before any task exists, a short, ungraded, adaptive check sets the student's starting level in each subject ("I'm not sure" is allowed).
 5. **Today.** One highlighted next step at a time. Each day is a theme subject: a short **lesson** at the student's level + 3-question check → the **practice set** (unlocked after the lesson) → a short reflection.
 6. **Path.** A grade-by-grade roadmap (classes, clubs, competitions and olympiads) and an editable daily schedule that adapts to how the student is doing.
 7. **Practice and Code Lab.** Auto-graded practice in 10 subjects at 5 levels. For tech, finance, engineering, and environmental careers, **real Python exercises** run in the browser (Pyodide in a Web Worker) against visible and hidden tests, with hints, a worked solution after 3 failed tries, a 6-second loop timeout, and paste detection.
-8. **Me.** XP, levels, streaks, 16 badges, a prize shop parents or teachers can stock, and an integrity score that keeps progress honest (timed quizzes, focus timers that pause off-tab, reflection checks).
+8. **Portfolio.** Students record projects, clubs, competitions, volunteering, work, courses, skills, and what they learned. Completed roadmap milestones appear automatically. A downloadable resume draft summarizes their interests and documented experience; explored tasters are kept separate from resume credentials.
+9. **Me.** XP, levels, streaks, 16 badges, a prize shop parents or teachers can stock, and an integrity score that keeps progress honest (timed quizzes, focus timers that pause off-tab, reflection checks). Personality assessments can be retaken from the results or Me page without erasing progress.
+10. **Daily encouragement.** The welcome page and student dashboard show a short original quote that changes daily.
+11. **Meet the founders.** Read why co-founders Sruthi and Pahal started Pathfinder; the page is available before taking the assessment.
 
 ## Career data
 
 Pay, job growth, and education come from the U.S. Bureau of Labor Statistics Occupational Outlook Handbook (median annual pay, May 2025; projected employment growth 2025–2035). Rankings shown as "U.S. News #N" are from U.S. News & World Report's 2026 Best Jobs, for the ranks that could be confirmed. "% match" is Pathfinder's own estimate from the student's answers.
+
+Every career detail page also lists the **extracurriculars** that fit it (24 activities in `js/activities_extra.js` and `js/data.js`, each with a 15–25 minute do-it-now demo and how to join a real one), then **example programs** grouped as reach, target, and safety/likely starting points. Those are not applicant-specific admission predictions; grades, course rigor, residency, cost, and application year all matter. Trades and apprenticeships are shown where a four-year degree is not required.
 
 ## Run it on your laptop
 
