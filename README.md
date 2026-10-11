@@ -4,7 +4,7 @@ Pathfinder helps middle and high school students (grades 6–12) explore what th
 
 ## The flow
 
-1. **Quick start (about 3 minutes, no account).** Answer all 15 scenario questions, each with six choices mapped privately to one of six thinking dimensions. Choices are shuffled once per attempt and stay in the same order while navigating. Back/Next saves answers, and Next requires a choice. Then add a name, grade, interests, and favorite subjects. This is an exploratory tool, not a psychological diagnosis. Returning students can retake it without losing their portfolio or progress.
+1. **Quick start (about 3 minutes, no account).** Starts at *What should I call you?*, then grade, interests, and favorite subjects, then the 15 scenario questions (each with six choices mapped privately to one of six thinking dimensions; choices are shuffled once per attempt and stay in the same order while navigating). Back/Next saves answers, Next requires a choice, and refreshing resumes where the student left off. This is an exploratory tool, not a psychological diagnosis. Returning students can retake the quiz without losing their portfolio or progress.
 2. **Results.** Scores normalize each of the six thinking dimensions across 15 questions (15 opportunities per dimension). The highest-scoring career is recommended using those dimension scores plus interests, subjects, goals, and tried activities. The ranking is deterministic; students can compare other matches before choosing.
 3. **Explore.** Search and filter **34 careers** (health, tech, business, engineering & trades, creative, science, people) with a detail page for each. A second tab offers short tasters of 17 after-school activities (robotics, debate, coding club, HOSA, DECA…) to help students discover what they want to pursue.
 4. **Skill check.** Before any task exists, a short, ungraded, adaptive check sets the student's starting level in each subject ("I'm not sure" is allowed).
@@ -50,6 +50,8 @@ Then open http://localhost:8000.
 Tip: in *Me → Settings*, turn on **Demo mode** to make focus timers run 60× faster while trying things out.
 
 ## Notes
+
+- To start over on a device, open `http://localhost:8000/?reset` (or use *Me → Settings → Reset all data*).
 
 - Progress is saved in the browser on this device (`localStorage`); there are no accounts yet. *Me → Settings → Reset all data* starts over.
 - Python in the Code Lab loads from a CDN the first time (about 10 MB), so it needs internet once.

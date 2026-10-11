@@ -32,6 +32,13 @@
     tryouts: {}, activity: {}, rest: {}, portfolio: [],
     settings: { demo: false },
   });
+  // Opening the app with ?reset (e.g. http://localhost:8000/?reset) clears saved progress on this device.
+  try {
+    if (/[?&]reset(=|&|$)/.test(location.search)) {
+      localStorage.removeItem(STORE_KEY);
+      history.replaceState(null, '', location.pathname + (location.hash || ''));
+    }
+  } catch (e) { /* storage unavailable */ }
   let S = load();
 
   function load() {
@@ -512,7 +519,7 @@
 
   // ---------- quick start: one question at a time ----------
   let ob = null;
-  const OB_STEPS = ['quiz', 'name', 'grade', 'interests', 'subjects'];
+  const OB_STEPS = ['name', 'grade', 'interests', 'subjects', 'quiz'];
   const OB_QUIZ = D.QUESTIONS.length;
 
   function shuffledOptionOrder() {
@@ -542,7 +549,12 @@
       save();
     }
     const retake = !!S.quizDraft.retake;
-    ob = { step: !S.personality || retake ? 'quiz' : 'name', retake, qi: 0, answers: Object.assign({}, S.quizDraft.answers), name: p ? p.name : '', grade: p ? String(p.grade) : '', picks: p && p.picks ? p.picks.slice() : [], subjects: p && p.subjects ? p.subjects.slice() : [] };
+    // New students start at their name. If their details are already saved but the quiz isn't finished, resume the quiz.
+    const draftAnswers = S.quizDraft.answers || {};
+    const nextQ = D.QUESTIONS.findIndex((_, i) => !Number.isInteger(draftAnswers[i]));
+    const detailsDone = !!(p && p.name && p.grade);
+    const startStep = retake ? 'quiz' : !S.personality ? (detailsDone ? 'quiz' : 'name') : 'name';
+    ob = { step: startStep, retake, qi: startStep === 'quiz' ? (nextQ < 0 ? OB_QUIZ - 1 : nextQ) : 0, answers: Object.assign({}, S.quizDraft.answers), name: p ? p.name : '', grade: p ? String(p.grade) : '', picks: p && p.picks ? p.picks.slice() : [], subjects: p && p.subjects ? p.subjects.slice() : [] };
   }
 
   function subjectChips(grade, selected) {
@@ -568,13 +580,14 @@
     const box = $('#ob');
     if (!box || !ob) return;
     const si = OB_STEPS.indexOf(ob.step);
-    const done = ob.step === 'quiz' ? ob.qi : OB_QUIZ + si - 1;
-    const pct = Math.round((done / (OB_QUIZ + 4)) * 100);
+    const total = ob.retake ? OB_QUIZ : OB_QUIZ + 4;
+    const done = ob.retake ? ob.qi : ob.step === 'quiz' ? 4 + ob.qi : si;
+    const pct = Math.round((done / total) * 100);
     const back = () => {
       const k = OB_STEPS.indexOf(ob.step);
       if (ob.step === 'quiz' && ob.qi > 0) ob.qi--;
-      else if (ob.step === 'name' && !ob.retake) { ob.step = 'quiz'; ob.qi = OB_QUIZ - 1; }
-      else if (k > 0) ob.step = OB_STEPS[k - 1];
+      else if (ob.step === 'quiz' && !ob.retake) ob.step = 'subjects';
+      else if (ob.step !== 'quiz' && k > 0) ob.step = OB_STEPS[k - 1];
       drawStart();
     };
     const shell = (say, inner, foot) => `
@@ -619,22 +632,23 @@
         `<small class="muted">Optional</small><button class="btn big" id="ob-next">Continue →</button>`);
       $('#ob-next').addEventListener('click', () => {
         ob.subjects = $$('#subj input:checked').map((i) => i.value);
-        obSaveProfile(); obFinish();
+        obSaveProfile();
+        if (S.personality) { go('#/reveal'); } // just editing details; the quiz is already done
+        else { ob.step = 'quiz'; ob.qi = 0; drawStart(); }
       });
     } else {
       const q = D.QUESTIONS[ob.qi];
       const say = 'Choose the option that feels closest to your first instinct. There are no right answers.';
       const advance = () => {
         if (ob.qi + 1 < OB_QUIZ) { ob.qi++; drawStart(); }
-        else if (ob.retake) obFinish();
-        else { ob.step = 'name'; drawStart(); }
+        else obFinish();
       };
       const optionOrder = S.quizDraft.optionOrder[ob.qi];
       box.innerHTML = shell({ t: say },
         `${ob.qi === 0 ? `<p class="daily-quote">“${dailyQuote()}”</p>` : ''}
          <p class="eyebrow">Question ${ob.qi + 1} of ${OB_QUIZ}</p><div class="statement">${esc(q.q)}</div>
         <div class="faces">${optionOrder.map((answerIndex) => `<button class="face ${ob.answers[ob.qi] === answerIndex ? 'sel' : ''}" data-v="${answerIndex}" aria-pressed="${ob.answers[ob.qi] === answerIndex}"><span>${esc(q.options[answerIndex].text)}</span></button>`).join('')}</div>
-         <div class="row quiz-nav"><button class="btn ghost" id="quiz-back" ${ob.qi === 0 ? 'disabled' : ''}>Back</button><button class="btn" id="quiz-next" ${Number.isInteger(ob.answers[ob.qi]) ? '' : 'disabled'}>${ob.qi === OB_QUIZ - 1 ? 'Finish assessment' : 'Next'}</button></div>`);
+         <div class="row quiz-nav"><button class="btn ghost" id="quiz-back" ${ob.qi === 0 && ob.retake ? 'disabled' : ''}>Back</button><button class="btn" id="quiz-next" ${Number.isInteger(ob.answers[ob.qi]) ? '' : 'disabled'}>${ob.qi === OB_QUIZ - 1 ? 'Finish assessment' : 'Next'}</button></div>`);
       $$('.face').forEach((b) => b.addEventListener('click', () => {
         ob.answers[ob.qi] = Number(b.dataset.v);
         S.quizDraft = { retake: ob.retake, answers: Object.assign({}, ob.answers), optionOrder: S.quizDraft.optionOrder };
@@ -646,7 +660,7 @@
         });
         $('#quiz-next').disabled = false;
       }));
-      $('#quiz-back').addEventListener('click', () => { if (ob.qi > 0) { ob.qi--; drawStart(); } });
+      $('#quiz-back').addEventListener('click', () => { if (ob.qi > 0) ob.qi--; else if (!ob.retake) ob.step = 'subjects'; else return; drawStart(); });
       $('#quiz-next').addEventListener('click', () => { if (Number.isInteger(ob.answers[ob.qi])) advance(); });
     }
     bindBack();
