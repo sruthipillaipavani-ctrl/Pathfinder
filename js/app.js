@@ -2,6 +2,7 @@
 (function () {
   const D = window.PF_DATA;
   const P = window.PF_PRACTICE;
+  const A = window.PF_ADAPT;
   const STORE_KEY = 'pathfinder.v1';
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => [...(root || document).querySelectorAll(sel)];
@@ -53,6 +54,13 @@
   const skill = (d) => (S.skills[d] = S.skills[d] || { level: 1, history: [] });
   const isPlaced = (d) => { const s = skill(d); return !!s.placed || s.history.length > 0; };
   const levelName = (n) => D.SKILL_LEVELS[Math.min(n, 5) - 1];
+  // Pace for one subject: the student's own setting wins, then recent results in that subject, then overall.
+  const domainPace = (d) => {
+    const pref = S.settings && S.settings.pace;
+    if (pref === 'slower' || pref === 'faster') return pref;
+    return A.scored(skill(d).history).length >= 2 ? A.paceFor(skill(d)) : A.overallPace(S.skills, 'auto');
+  };
+  const paceMark = (d) => { const p = domainPace(d); return p === 'faster' ? ' · ▲ stepping up' : p === 'slower' ? ' · ▼ taking it slower' : ''; };
   const unplaced = () => (S.careerId ? career().domains.filter((d) => !isPlaced(d)) : []);
   const level = () => Math.floor(S.xp / 250) + 1;
   const levelTitle = (l) => D.LEVEL_TITLES[Math.min(l - 1, D.LEVEL_TITLES.length - 1)];
@@ -229,7 +237,13 @@
       stretch = true;
       note = 'You are crushing it — bonus stretch challenges have been added to upcoming days.';
     }
-    return { factor, note, stretch };
+    // Accuracy-based pace: slower when recent sets were hard, faster when they were easy.
+    const pace = A.overallPace(S.skills, S.settings && S.settings.pace);
+    const chosen = !!(S.settings && (S.settings.pace === 'slower' || S.settings.pace === 'faster'));
+    const info = A.describePace(pace, A.recentAverage(S.skills), chosen);
+    if (pace === 'slower') { factor *= 0.8; stretch = false; note = info.text; }
+    else if (pace === 'faster' && !(recent.length >= 2 && recentAvg < 0.5)) { factor = Math.min(1.35, factor * 1.1); stretch = true; note = info.text; }
+    return { factor, note, stretch, pace, paceLabel: info.label };
   }
 
   function generateDay(date) {
@@ -244,7 +258,7 @@
     const name = D.DOMAINS[dom].name;
     const tasks = [{ id: uid(), type: 'lesson', domain: dom, title: `Learn: ${name}`, minutes: round5(total * 0.35), status: 'todo' }];
     if (dom === 'coding') tasks.push({ id: uid(), type: 'code', domain: 'coding', title: 'Python exercise', minutes: round5(total * 0.45), status: 'todo' });
-    else tasks.push({ id: uid(), type: 'practice', domain: dom, n: Math.max(4, Math.min(7, Math.round(5 * st.factor))), title: `${name} practice`, minutes: round5(total * 0.35), status: 'todo' });
+    else tasks.push({ id: uid(), type: 'practice', domain: dom, n: Math.max(3, Math.min(8, Math.round(5 * st.factor))), title: `${name} practice`, minutes: round5(total * 0.35), status: 'todo' });
     tasks.push({ id: uid(), type: 'reflect', title: 'Daily reflection', prompt: D.REFLECT_PROMPTS[idx % D.REFLECT_PROMPTS.length].replace(/\{career\}/g, c.title), minutes: 5, status: 'todo' });
     if (st.stretch) {
       const d2 = c.domains[(idx + 1) % c.domains.length];
@@ -969,7 +983,7 @@
           <div class="row center"><a class="btn ghost" href="#/practice">Do extra practice</a><a class="btn ghost" href="#/explore?tab=tryouts">Try a new activity</a></div></div>
         <ol class="steps">${stepsHTML(day)}</ol>`}
       <div class="xp-line"><span>Level ${lv}</span><div class="bar"><div style="width:${(into / 250) * 100}%"></div></div><span>${S.xp} XP</span></div>
-      <p class="adapt">🧬 ${esc(stamina().note)} <a href="#/schedule?tab=schedule">Edit my schedule</a></p>
+      <p class="adapt">${(() => { const st = stamina(); return `<span class="tag ${st.pace === 'slower' ? 'warn' : 'accent'}">${esc(st.paceLabel)}</span> ${esc(st.note)}`; })()} <a href="#/schedule?tab=schedule">Edit my schedule</a></p>
       ${suggestTry()}`;
     },
     bind: () => {
@@ -1100,7 +1114,7 @@
       const c = career();
       if (!domain || !D.DOMAINS[domain]) {
         const others = Object.keys(D.DOMAINS).filter((d) => !c.domains.includes(d));
-        const tile = (d) => { const s = skill(d); return `<a class="tile" href="#/practice/${d}"><span>${D.DOMAINS[d].emoji}</span><b>${D.DOMAINS[d].name}</b><small>${isPlaced(d) ? `Level ${s.level} · ${levelName(s.level)}` : 'Take placement quiz'}</small></a>`; };
+        const tile = (d) => { const s = skill(d); return `<a class="tile" href="#/practice/${d}"><span>${D.DOMAINS[d].emoji}</span><b>${D.DOMAINS[d].name}</b><small>${isPlaced(d) ? `Level ${s.level} · ${levelName(s.level)}${paceMark(d)}` : 'Take placement quiz'}</small></a>`; };
         return `
         <h1>Practice</h1>
         <p class="muted">Short sets at your level. Score 80%+ to level up. Free practice earns XP too.</p>
@@ -1110,7 +1124,13 @@
       }
       const s = skill(domain);
       if (!isPlaced(domain)) { quiz = null; pl = newPlacement([domain], 'single', params.task); }
-      else { pl = null; quiz = { domain, taskId: params.task, level: s.level, qs: P.makeSet(domain, s.level, (params.task && findTask(params.task) && findTask(params.task).task.n) || 5), i: 0, correct: 0, times: [], shownAt: Date.now() }; }
+      else {
+        pl = null;
+        const tk = params.task && findTask(params.task);
+        const pace = domainPace(domain);
+        const n = (tk && tk.task.n) || A.setSize(5, pace);
+        quiz = { domain, taskId: params.task, level: s.level, pace, qs: P.makeSet(domain, s.level, n, A.mixLevels(n, s.level, pace)), i: 0, correct: 0, times: [], shownAt: Date.now() };
+      }
       return `<section class="card narrow quiz" id="quiz"></section>`;
     },
     bind: (domain) => { if (!domain || !D.DOMAINS[domain]) return; if (pl) drawPlacement(); else drawQuestion(); },
@@ -1145,13 +1165,21 @@
     const avgTime = quiz.times.reduce((a, b) => a + b, 0) / quiz.times.length;
     const rushed = avgTime < 2.5;
     let msg = '';
-    s.history.push({ date: today(), acc, level: quiz.level });
+    const entry = { date: today(), acc, level: quiz.level, t: avgTime };
+    if (rushed) entry.rushed = true;
+    s.history.push(entry);
+    const dname = D.DOMAINS[quiz.domain].name;
     if (rushed) {
-      integrity(-4, `Answered a ${D.DOMAINS[quiz.domain].name} quiz in ${avgTime.toFixed(1)}s per question (too fast to be real work)`);
-      msg = 'That was really fast, so your level stays the same this time. Take your time and work each problem out!';
-    } else if (acc >= 0.8 && s.level < 5) { s.level++; msg = `🚀 Level up! ${D.DOMAINS[quiz.domain].name} is now Level ${s.level} (${levelName(s.level)}). Questions will get harder.`; }
-    else if (acc < 0.4 && s.level > 1) { s.level--; msg = `We eased ${D.DOMAINS[quiz.domain].name} back to Level ${s.level} so you can master the basics first.`; }
-    else msg = acc >= 0.8 ? 'Perfect mastery: you are at the top level!' : 'Keep practicing at this level. Score 80% to level up.';
+      integrity(-4, `Answered a ${dname} quiz in ${avgTime.toFixed(1)}s per question (too fast to be real work)`);
+      msg = 'That was really fast, so this set does not count toward your level. Take your time and work each problem out!';
+    } else {
+      const ev = A.evaluate(s);
+      if (ev.change === 'up') { s.level++; msg = `🚀 Level up! ${dname} is now Level ${s.level} (${levelName(s.level)}). ${ev.why === 'perfect' ? 'A perfect score!' : 'Two strong sets in a row.'} Questions will get harder.`; }
+      else if (ev.change === 'down') { s.level--; msg = `We eased ${dname} back to Level ${s.level} (${levelName(s.level)}). ${ev.why === 'two-weak' ? 'Two tough sets in a row' : 'That one was really tough'}, so we'll rebuild the basics with easier warm-ups. This is how mastery works.`; }
+      else msg = `${acc >= 0.8 ? 'Strong set! ' : acc >= 0.5 ? 'Nice effort. ' : 'Tough one, and that is okay. '}${A.progressText(s)}`;
+    }
+    if (quiz.pace === 'faster') msg += ' This set mixed in a few harder questions because you have been doing well.';
+    else if (quiz.pace === 'slower') msg += ' This set had easier warm-ups to help you build confidence.';
     if (acc === 1 && !rushed) award('quiz-whiz');
     const xp = (10 + quiz.correct * 4 + quiz.level * 2) * (rushed ? 0.3 : 1);
     if (quiz.taskId && findTask(quiz.taskId)) completeTask(quiz.taskId, 'auto', { acc, level: quiz.level }, xp, 'Practice set');
@@ -1271,6 +1299,7 @@
         <p class="muted small" style="margin-top:10px">Pathfinder checks that progress is real: quizzes are timed, focus timers pause when you leave the tab, reflections are checked for copy-paste and gibberish, and pasted code is flagged. Honest work raises your score. Below 80, XP is reduced.</p>
         <ul class="log">${S.integrity.log.slice(0, 8).map((l) => `<li><span class="${l.delta < 0 ? 'bad' : 'ok'}">${l.delta > 0 ? '+' : ''}${l.delta}</span> ${esc(l.msg)} <small class="muted">${prettyDate(l.date)}</small></li>`).join('') || '<li class="muted small">No events yet. Keep it clean! ✨</li>'}</ul></div></details>
       <details class="fold"><summary>⚙️ Settings</summary><div>
+        <label class="field-inline">Pace <select id="pace-pref" style="width:auto">${[['auto', 'Automatic (recommended)'], ['slower', 'A bit slower'], ['faster', 'A bit faster']].map(([v, l]) => `<option value="${v}" ${((S.settings && S.settings.pace) || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="toggle"><input type="checkbox" id="demo" ${S.settings.demo ? 'checked' : ''}> Demo mode (focus timers run 60× faster, for trying the app)</label>
         <div class="row start" style="gap:18px"><a href="#/profile" class="link">Edit my profile</a><button class="link danger" id="reset">Reset all data</button></div></div></details>`;
     },
@@ -1287,6 +1316,7 @@
         save(); render();
       });
       $('#demo').addEventListener('change', (e) => { S.settings.demo = e.target.checked; save(); });
+      $('#pace-pref').addEventListener('change', (e) => { S.settings.pace = e.target.value; save(); toast('Pace updated. Your next sets will use it.'); });
       $('#reset').addEventListener('click', () => {
         if (!confirm('Erase all Pathfinder data on this device? This cannot be undone.')) return;
         S = blank(); save(); location.hash = '#/start'; render();
@@ -1530,6 +1560,71 @@
     </article>`;
   }
 
+  // ---------- demo challenge round: questions matched to the student's current level ----------
+  const ACTIVITY_DOMAIN = {
+    'coding-club': 'coding', 'cyber-club': 'coding', 'game-jam': 'logic', 'math-team': 'math', robotics: 'logic',
+    'science-olympiad': 'science', hosa: 'science', 'environment-club': 'science', 'sports-med': 'science', 'animal-care': 'science',
+    debate: 'writing', journalism: 'writing', 'communication-lab': 'writing', 'mock-trial': 'civics',
+    'art-design': 'design', 'photo-video': 'design', 'maker-architecture': 'math', 'aviation-club': 'math', 'skilled-trades': 'math',
+    'peer-tutoring': 'people', 'psych-club': 'people', volunteering: 'people', 'business-club': 'economics', 'investment-club': 'economics',
+  };
+
+  function showChallengeOrRate(a) {
+    const dom = ACTIVITY_DOMAIN[a.id];
+    const box = $('#challenge');
+    const rate = () => { if (box) box.hidden = true; $('#rate').hidden = false; $('#rate').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+    if (!dom || !isPlaced(dom) || !box) return rate();
+    const s = skill(dom), pace = domainPace(dom), n = A.setSize(3, pace);
+    box.hidden = false;
+    box.innerHTML = `<div class="card soft"><h3>⚡ Optional challenge round</h3>
+      <p class="muted">${n} questions in ${D.DOMAINS[dom].name}, matched to your level (Level ${s.level}).${pace === 'faster' ? ' A few are a step harder because you have been doing well.' : pace === 'slower' ? ' Gentler warm-ups to build confidence.' : ''}</p>
+      <div class="row start"><button class="btn" id="ch-go">Start</button><button class="link" id="ch-skip">Skip</button></div></div>`;
+    $('#ch-skip').addEventListener('click', rate);
+    $('#ch-go').addEventListener('click', () => runChallenge(box, dom, n, pace, rate));
+  }
+
+  function runChallenge(box, dom, n, pace, done) {
+    const s = skill(dom);
+    const qs = P.makeSet(dom, s.level, n, A.mixLevels(n, s.level, pace));
+    const name = D.DOMAINS[dom].name;
+    let i = 0, correct = 0, shown = Date.now();
+    const times = [];
+    const finish = () => {
+      const acc = correct / qs.length;
+      const avgT = times.reduce((x, y) => x + y, 0) / (times.length || 1);
+      const rushed = avgT < 2.5;
+      const entry = { date: today(), acc, level: s.level, t: avgT, challenge: true };
+      if (rushed) entry.rushed = true;
+      s.history.push(entry);
+      let note = '';
+      if (!rushed) {
+        const ev = A.evaluate(s);
+        if (ev.change === 'up') { s.level++; note = `🚀 ${name} is now Level ${s.level} (${levelName(s.level)})!`; }
+        else if (ev.change === 'down') { s.level--; note = `We eased ${name} to Level ${s.level} so you can rebuild the basics. That's how mastery works.`; }
+      }
+      addXP((8 + correct * 3) * (rushed ? 0.3 : 1), 'Challenge round');
+      checkBadges(); save();
+      box.innerHTML = `<div class="card soft"><h3>${correct} of ${qs.length} ${acc >= 0.8 ? '🌟' : '💪'}</h3><p>${esc(rushed ? 'That was very quick, so it does not count toward your level.' : note || A.progressText(s))}</p><button class="btn" id="ch-next">Continue</button></div>`;
+      $('#ch-next').addEventListener('click', done);
+    };
+    const draw = () => {
+      if (i >= qs.length) return finish();
+      const q = qs[i];
+      shown = Date.now();
+      box.innerHTML = `<div class="card"><div class="quiz-head"><span>Challenge ${i + 1} / ${qs.length}</span><span>${name} · Level ${s.level}</span></div>
+        <h2 class="question">${esc(q.q)}</h2><div class="choices">${q.choices.map((c, k) => `<button class="choice" data-c="${k}">${esc(c)}</button>`).join('')}</div><div class="feedback"></div></div>`;
+      $$('.choice', box).forEach((b) => b.addEventListener('click', () => {
+        const pick = Number(b.dataset.c), right = pick === q.answer;
+        times.push((Date.now() - shown) / 1000);
+        if (right) correct++;
+        $$('.choice', box).forEach((x, k) => { x.disabled = true; if (k === q.answer) x.classList.add('right'); else if (k === pick) x.classList.add('wrong'); });
+        $('.feedback', box).innerHTML = `<p class="${right ? 'ok' : 'bad'}">${right ? '✓ Correct!' : `✗ The answer is <b>${esc(q.choices[q.answer])}</b>`}</p><button class="btn">${i + 1 < qs.length ? 'Next →' : 'See results'}</button>`;
+        $('.feedback .btn', box).addEventListener('click', () => { i++; draw(); });
+      }));
+    };
+    draw();
+  }
+
   routes.tryout = {
     html: (id) => {
       const a = D.ACTIVITIES.find((x) => x.id === id);
@@ -1544,6 +1639,7 @@
             ${st.w ? `<textarea rows="3" placeholder="Write a few words…"></textarea><div class="row"><small class="muted">A few words is plenty.</small><button class="btn small" data-done>Done</button></div>`
                    : `<label class="toggle"><input type="checkbox" data-done> I did this</label>`}
             <div class="reveal" hidden></div></li>`).join('')}</ol>
+        <div id="challenge" hidden></div>
         <div id="rate" hidden>
           <h3>How was it?</h3>
           <div class="rating">${D.RATINGS.map((r) => `<button data-r="${r.v}"><span>${r.emoji}</span>${r.label}</button>`).join('')}</div>
@@ -1563,7 +1659,7 @@
           li.classList.add('done');
           $$('textarea,input,button', li).forEach((e) => { e.disabled = true; });
           if (st.reveal) { const r = $('.reveal', li); r.textContent = '💡 ' + st.reveal; r.hidden = false; }
-          if (marked.size === a.steps.length) { $('#rate').hidden = false; $('#rate').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          if (marked.size === a.steps.length) showChallengeOrRate(a);
         };
         const el = $('[data-done]', li);
         if (st.w) el.addEventListener('click', () => {
@@ -1618,12 +1714,14 @@
       const f = findTask(id);
       if (!f || f.task.type !== 'lesson') return `<section class="card narrow"><p>Lesson not found.</p><a class="btn" href="#/today">Back</a></section>`;
       const t = f.task, s = skill(t.domain);
-      const tier = t.tier || tierFor(s.level);
+      const pace = domainPace(t.domain);
+      const baseTier = tierFor(s.level);
+      const tier = t.tier || A.lessonTier(s.level, pace);
       const lesson = window.PF_LESSONS[t.domain][tier - 1];
-      lq = { id, domain: t.domain, tier, level: Math.min(s.level, [2, 3, 5][tier - 1]), opened: Date.now(), i: 0, correct: 0 };
+      lq = { id, domain: t.domain, tier, pace, level: Math.min(s.level, [2, 3, 5][tier - 1]), opened: Date.now(), i: 0, correct: 0 };
       return `
       <section class="card narrow lesson" id="lesson">
-        <p class="muted small">📖 ${D.DOMAINS[t.domain].emoji} ${D.DOMAINS[t.domain].name} · ${TIER_NAMES[tier - 1]}</p>
+        <p class="muted small">📖 ${D.DOMAINS[t.domain].emoji} ${D.DOMAINS[t.domain].name} · ${TIER_NAMES[tier - 1]}${tier !== baseTier ? ' · adjusted to your recent results' : ''}</p>
         <h2>${esc(lesson.title)}</h2>
         ${lesson.body.map((p) => `<p>${esc(p)}</p>`).join('')}
         <pre class="example">${esc(lesson.example)}</pre>
@@ -1636,7 +1734,7 @@
     bind: (id) => {
       const go1 = $('#lesson-go');
       if (!go1) return;
-      go1.addEventListener('click', () => { lq.qs = P.makeSet(lq.domain, lq.level, 3); lq.i = 0; lq.correct = 0; lq.times = []; drawLessonQ(); });
+      go1.addEventListener('click', () => { { const n = A.setSize(3, lq.pace); lq.qs = P.makeSet(lq.domain, lq.level, n, A.mixLevels(n, lq.level, lq.pace)); } lq.i = 0; lq.correct = 0; lq.times = []; drawLessonQ(); });
       const easier = $('#lesson-easier');
       if (easier) easier.addEventListener('click', () => { const t = findTask(id).task; t.tier = Math.max(1, (t.tier || lq.tier) - 1); t.fails = 0; save(); render(); });
     },
@@ -1664,7 +1762,7 @@
 
   function finishLessonCheck(box) {
     const f = findTask(lq.id), t = f.task;
-    const passed = lq.correct >= 2;
+    const passed = lq.correct >= Math.ceil(lq.qs.length * 0.6);
     if (passed) {
       const readSecs = (lq.shownAt - lq.opened) / 1000 - 8; // rough time before the check began
       const skimmed = (Date.now() - lq.opened) / 1000 < 25;
@@ -1720,7 +1818,8 @@
   const EXS = () => window.PF_EXERCISES;
   const relevantExercises = () => EXS().filter((e) => e.careers.includes('*') || (S.careerId && e.careers.includes(S.careerId)));
   function pickExercise() {
-    const lv = skill('coding').level;
+    const cs0 = skill('coding');
+    const lv = A.codeTarget(cs0.level, cs0, domainPace('coding')); // harder after clean solves, easier after struggles
     const all = relevantExercises();
     let cands = all.filter((e) => !S.codeDone[e.id] && e.level <= lv + 1);
     if (!cands.length) cands = all.filter((e) => !S.codeDone[e.id]);

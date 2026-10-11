@@ -16,6 +16,16 @@ Pathfinder helps middle and high school students (grades 6–12) explore what th
 10. **Daily encouragement.** The welcome page and student dashboard show a short original quote that changes daily.
 11. **Meet the founders.** Read why co-founders Sruthi and Pahal started Pathfinder; the page is available before taking the assessment.
 
+## How difficulty adapts
+
+Everything a student does feeds a small, tested engine (`js/adapt.js`) so the app gets harder as they improve and gentler when they struggle:
+
+- **Level (per subject)** moves up after two strong sets (80%+) in a row, or one perfect set, and moves down after two weak sets (under 50%) or one very low set (20% or less). One lucky or unlucky set never swings it. Sets answered too fast to be real work are ignored.
+- **Pace** comes from the last few sets. *Stepping it up*: longer sets with harder questions mixed in, a bonus stretch task, and a more advanced lesson. *Taking it slower*: shorter sets, easier warm-ups, shorter days, and an easier lesson. Students can also choose Automatic, A bit slower, or A bit faster in *Me → Settings*.
+- **Python exercises** aim a level higher after clean solves and a level lower after a struggle (worked solution viewed).
+- **Activity demos** end with an optional challenge round, matched to the student's level in the related subject (for example the math team demo uses math). It counts toward the same level and pace.
+- The app always says why: results screens, the Today page, lessons, and Practice explain what changed and what is needed to level up.
+
 ## Career data
 
 Pay, job growth, and education come from the U.S. Bureau of Labor Statistics Occupational Outlook Handbook (median annual pay, May 2025; projected employment growth 2025–2035). Rankings shown as "U.S. News #N" are from U.S. News & World Report's 2026 Best Jobs, for the ranks that could be confirmed. "% match" is Pathfinder's own estimate from the student's answers.
@@ -53,6 +63,7 @@ index.html           page shell
 css/styles.css       design system (light + dark, phone tab bar)
 js/data.js           original careers, personality questions, subjects, badges, question banks
 js/careers_extra.js  20 more careers + BLS pay/growth/education for all, interest tiles
+js/adapt.js          level, pace, and difficulty rules (pure functions)
 js/practice.js       adaptive question generator + placement helpers
 js/lessons.js        mini-lessons (10 subjects × 3 levels)
 js/exercises.js      30 Python exercises with visible + hidden tests

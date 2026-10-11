@@ -97,23 +97,34 @@ window.PF_PRACTICE = (function () {
   };
 
   // Returns `count` questions for a domain at a level (1–5).
-  function makeSet(domain, level, count) {
+  // `levels` (optional): the level of each question, from PF_ADAPT.mixLevels. Without it, a set is
+  // mostly the student's level with one easier warm-up question.
+  function makeSet(domain, level, count, levels) {
     count = count || 5;
+    const plan = Array.from({ length: count }, (_, i) => (levels && levels[i]) || (i === 0 && level > 1 ? level - 1 : level));
     if (GEN[domain]) {
       const gens = GEN[domain];
-      return Array.from({ length: count }, (_, i) => {
-        // Mostly current level, with an occasional review question one level below.
-        const lv = i === 0 && level > 1 ? level - 1 : level;
-        return Object.assign(gens[Math.min(lv, gens.length) - 1](), { level: lv });
+      const seen = new Set();
+      return plan.map((lv) => {
+        let q;
+        for (let tries = 0; tries < 8; tries++) { q = gens[Math.min(lv, gens.length) - 1](); if (!seen.has(q.q)) break; }
+        seen.add(q.q);
+        return Object.assign(q, { level: lv });
       });
     }
-    const bank = (window.PF_DATA.BANK[domain] || []).map(([q, choices, a, lv]) => ({ q, choices, a, lv }));
-    const target = Math.min(level, 3);
-    let pool = bank.filter((b) => b.lv === target);
-    // Levels 4–5 mix in the hardest questions plus the level below for a longer set.
-    if (pool.length < count) pool = pool.concat(shuffle(bank.filter((b) => b.lv === target - 1 || b.lv === target + 1)));
-    return shuffle(pool).slice(0, count).map((b) => Object.assign(mc(b.q, b.choices[b.a], b.choices), { level: b.lv }));
+    // Banked subjects only have content up to level 3; take unused questions closest to each planned level.
+    const bank = shuffle((window.PF_DATA.BANK[domain] || []).map(([q, choices, a, lv]) => ({ q, choices, a, lv })));
+    const out = [];
+    plan.forEach((lv) => {
+      const want = Math.min(lv, 3);
+      const idx = bank.map((b, i) => [i, Math.abs(b.lv - want)]).sort((x, y) => x[1] - y[1])[0];
+      if (!idx) return;
+      const b = bank.splice(idx[0], 1)[0];
+      out.push(Object.assign(mc(b.q, b.choices[b.a], b.choices), { level: b.lv }));
+    });
+    return out;
   }
+
 
   const bankList = (domain) => (window.PF_DATA.BANK[domain] || []).map(([q, choices, a, lv]) => Object.assign(mc(q, choices[a], choices), { level: lv }));
 
