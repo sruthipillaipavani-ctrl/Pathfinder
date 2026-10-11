@@ -49,6 +49,10 @@ Then open http://localhost:8000.
 
 Tip: in *Me → Settings*, turn on **Demo mode** to make focus timers run 60× faster while trying things out.
 
+## Hosting (Vercel)
+
+It is a static site with no build step. In Vercel: **Add New → Project → Import** the GitHub repo, keep **Framework Preset: Other**, leave Build Command and Output Directory empty, and deploy. Every push to `main` then redeploys automatically. `vercel.json` adds basic security headers.
+
 ## Notes
 
 - To start over on a device, open `http://localhost:8000/?reset` (or use *Me → Settings → Reset all data*).
