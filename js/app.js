@@ -91,7 +91,9 @@
     const el = document.createElement('div');
     el.className = `toast ${kind || ''}`;
     el.innerHTML = msg;
-    $('#toasts').appendChild(el);
+    const box = $('#toasts');
+    while (box.children.length >= 2) box.firstChild.remove(); // keep the screen readable
+    box.appendChild(el);
     setTimeout(() => el.classList.add('out'), 3800);
     setTimeout(() => el.remove(), 4300);
   }
@@ -180,7 +182,11 @@
   }
 
   function matchCareers() {
-    const dimensions = S.personality.dimensions || legacyDimensionScores(S.personality);
+    const rawDimensions = S.personality.dimensions || legacyDimensionScores(S.personality);
+    // Raw dimension scores top out around 30-45% (each answer goes to just one of six dimensions), which made every
+    // match look weak and nearly tied. Scale to the student's own strongest pattern so fit is measured against their peak.
+    const peak = Math.max(1, ...Object.values(rawDimensions));
+    const dimensions = Object.fromEntries(Object.entries(rawDimensions).map(([key, value]) => [key, Math.round((value / peak) * 100)]));
     const p = S.profile;
     const text = [p.hobbies, p.interests, p.aspirations].join(' ').toLowerCase();
     return D.CAREERS.map((c) => {
@@ -377,7 +383,7 @@
   const ALIASES = { careers: 'reveal', test: 'start', me: 'rewards', home: 'today' };
   let timers = [];
   const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
-  const exitTarget = (n) => (n === 'tryout' ? '#/explore?tab=tryouts' : n === 'start' ? '#/' : S.careerId ? '#/today' : '#/reveal');
+  const exitTarget = (n) => (n === 'tryout' ? '#/explore?tab=tryouts' : n === 'start' ? '#/' : n === 'skillcheck' ? '#/explore' : S.careerId ? '#/today' : '#/reveal');
 
   function render() {
     stopFocusTimer();
@@ -398,10 +404,14 @@
     const focusMode = FOCUS.includes(name) || ((name === 'practice' || name === 'code') && !!arg);
     document.body.classList.toggle('focus', focusMode);
     document.body.dataset.route = name;
+    const SCREEN_TITLES = { start: 'Get started', reveal: 'Your results', explore: 'Explore careers', today: 'Today', schedule: 'My path', practice: 'Practice', code: 'Code Lab', lesson: 'Lesson', skillcheck: 'Set your starting level', rewards: 'Me', profile: 'About me', portfolio: 'My portfolio', founders: 'Meet the founders', tryout: 'Activity preview', focus: 'Focus session' };
+    const pageTitle = name === 'career' ? (D.CAREERS.find((c) => c.id === arg) || {}).title : SCREEN_TITLES[name];
+    document.title = pageTitle ? `${pageTitle} · Pathfinder` : 'Pathfinder';
     const app = $('#app');
     app.className = name === 'explore' ? 'wide' : name === 'founders' ? 'founders' : '';
     app.innerHTML = view.html(arg, params);
     $('#exit').setAttribute('href', exitTarget(name));
+    $('#exit').hidden = name === 'start' && !S.personality; // nowhere to go yet on the very first screens
     renderNav(name);
     if (view.bind) view.bind(arg, params);
     window.scrollTo(0, 0);
@@ -597,7 +607,7 @@
     const bindBack = () => { const b = $('#ob-back'); if (b && !b.hidden) b.addEventListener('click', back); };
 
     if (ob.step === 'name') {
-      box.innerHTML = shell({ t: 'First, a few details to personalize your career matches.' },
+      box.innerHTML = shell({ t: 'Welcome to Pathfinder! Answer a few quick questions (about 3 minutes) to find careers that fit you.' },
         `<h1>What should I call you?</h1><input class="big-input" id="ob-name" maxlength="30" placeholder="Your first name" autocomplete="given-name" value="${esc(ob.name)}">`,
         `<span></span><button class="btn big" id="ob-next" ${ob.name.trim() ? '' : 'disabled'}>Continue →</button>`);
       const inp = $('#ob-name'), nx = $('#ob-next');
@@ -706,8 +716,22 @@
       return `
       <section class="revealpage">
         <p class="eyebrow">Your results</p>
-        <h1>Your thinking patterns</h1>
-        <p class="muted">These are patterns across all 15 answers, not a fixed personality type or a prediction of your future.</p>
+        <h1>Your top career match</h1>
+        <p class="muted">Based on your 15 answers, interests, and favorite subjects. These are patterns, not a fixed personality type or a prediction of your future.</p>
+        <div class="hero-card">
+          <span class="match-badge">${m.score}% match</span>
+          <span class="big-emoji">${c.emoji}</span>
+          <p class="eyebrow">Your #1 match</p>
+          <h2>${esc(c.title)}</h2>
+          <p>${esc(c.summary)}</p>
+          ${m.reasons.length ? `<ul class="reasons">${m.reasons.slice(0, 3).map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}
+          ${facts(c)}
+          <div class="row start"><button class="btn big" data-pick="${c.id}">${mine ? 'Go to my plan →' : 'This is me. Build my path →'}</button><a class="btn ghost big" href="#/career/${c.id}">Learn more</a></div>
+        </div>
+        <h3>Also great for you</h3>
+        <div class="mini-list">${matches.slice(1, 4).map((x) => `<a class="mini-career" href="#/career/${x.c.id}"><span class="emo">${x.c.emoji}</span><div class="grow"><b>${esc(x.c.title)}</b><small>${money(x.c.pay)} · ${x.c.growth == null ? 'Varies' : (x.c.growth > 0 ? '▲' : x.c.growth < 0 ? '▼' : '') + Math.abs(x.c.growth) + '% growth'}</small></div><span class="score">${x.score}%</span></a>`).join('')}</div>
+        <div class="row center"><a class="btn ghost" href="#/explore">Browse all ${D.CAREERS.length} careers</a></div>
+        <h2 class="explain-head">How we got these matches</h2>
         <section class="ikigai-result">
           <p class="eyebrow">A framework for career fit</p>
           <h2>Four parts of purpose</h2>
@@ -723,19 +747,6 @@
         <section class="workstyle-result"><p class="eyebrow">Your six dimensions</p><p class="muted small">Scores are normalized across 15 opportunities per dimension. Your strongest patterns are not exclusive; close secondary strengths matter too.</p>
           <div class="dimension-grid">${top.map(([key, value], index) => `<article class="dimension-item ${index < 3 ? 'strong' : ''}"><div class="dimension-item-head"><b>${esc(D.DIMENSIONS[key].name)}</b><span>${value}%</span></div><p>${esc(D.DIMENSIONS[key].desc)}</p><div class="bar"><div style="width:${value}%"></div></div></article>`).join('')}</div>
         </section>
-        <div class="hero-card">
-          <span class="match-badge">${m.score}% match</span>
-          <span class="big-emoji">${c.emoji}</span>
-          <p class="eyebrow">Your #1 match</p>
-          <h2>${esc(c.title)}</h2>
-          <p>${esc(c.summary)}</p>
-          ${m.reasons.length ? `<ul class="reasons">${m.reasons.slice(0, 3).map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}
-          ${facts(c)}
-          <div class="row start"><button class="btn big" data-pick="${c.id}">${mine ? 'Go to my plan →' : 'This is me. Build my path →'}</button><a class="btn ghost big" href="#/career/${c.id}">Learn more</a></div>
-        </div>
-        <h3>Also great for you</h3>
-        <div class="mini-list">${matches.slice(1, 4).map((x) => `<a class="mini-career" href="#/career/${x.c.id}"><span class="emo">${x.c.emoji}</span><div class="grow"><b>${esc(x.c.title)}</b><small>${money(x.c.pay)} · ${x.c.growth == null ? 'Varies' : (x.c.growth > 0 ? '▲' : x.c.growth < 0 ? '▼' : '') + Math.abs(x.c.growth) + '% growth'}</small></div><span class="score">${x.score}%</span></a>`).join('')}</div>
-        <div class="row center"><a class="btn ghost" href="#/explore">Browse all ${D.CAREERS.length} careers</a></div>
         <div class="row center"><a class="link small" href="#/start?step=quiz">Retake personality assessment</a></div>
       </section>`;
     },
@@ -763,7 +774,7 @@
         <div class="career-list" id="clist">${list.map((c) => `
           <a class="career-tile ${c.id === S.careerId ? 'chosen' : ''}" data-cat="${c.cat}" data-q="${esc((c.title + ' ' + c.keywords.join(' ')).toLowerCase())}" href="#/career/${c.id}">
             <div class="top"><span class="emo">${c.emoji}</span><h3>${esc(c.title)}</h3><span class="score">${score[c.id]}%</span></div>
-            <p>${esc(c.summary.split('. ')[0])}.</p>
+            <p>${esc(c.summary.split('. ')[0].replace(/\.$/, ''))}.</p>
             <div class="pill-row"><span class="tag">${money(c.pay)}${c.pay ? '/yr' : ''}</span>${c.growth != null ? `<span class="tag ${c.growth > 0 ? 'accent' : 'warn'}">${c.growth > 0 ? '▲' : c.growth < 0 ? '▼' : ''} ${Math.abs(c.growth)}% growth</span>` : ''}${c.usn ? `<span class="tag">🏅 U.S. News #${c.usn}</span>` : ''}${c.id === S.careerId ? '<span class="tag accent">Your path</span>' : ''}</div>
           </a>`).join('')}</div>
         <p class="source">Pay: median annual pay (May 2025). Growth: projected 2025–2035. Source: U.S. Bureau of Labor Statistics, Occupational Outlook Handbook. “U.S. News” = rank in U.S. News &amp; World Report's 2026 Best Jobs. Percent match is Pathfinder's own estimate from your quiz.</p>`;
@@ -954,9 +965,9 @@
       ? '<span class="tag">Rest day scheduled</span>'
       : summary.canRest ? '<button class="link" id="rest-day">Schedule a rest day</button>' : '';
     return `<section class="weekly-summary">
-      <div class="weekly-summary-copy"><b>Weekly progress</b><small>${summary.daysAccounted} of ${summary.daysTracked} days accounted for</small></div>
+      <div class="weekly-summary-copy"><b>Weekly progress</b><small>${summary.daysTracked === 1 ? (summary.daysAccounted ? 'You showed up today. Nice start!' : 'Finish one step today to get started.') : `You have shown up ${summary.daysAccounted} of the last ${summary.daysTracked} days.`}</small></div>
       <div class="bar"><div style="width:${Math.round(summary.daysAccounted / summary.daysTracked * 100)}%"></div></div>
-      <div class="weekly-summary-meta"><span>${streak()} day streak</span>${restControl}</div>
+      <div class="weekly-summary-meta"><span>${streak() ? `🔥 ${streak()} day streak` : 'Finish a day to start a streak'}</span>${restControl}</div>
     </section>`;
   }
   function stepSub(t) {
@@ -1981,5 +1992,5 @@
   window.addEventListener('DOMContentLoaded', render);
 
   // Exposed for automated tests.
-  window.PF_APP = { checkReflection: (t, m) => checkReflection(t, m || {}), dimensionScores, state: () => S };
+  window.PF_APP = { checkReflection: (t, m) => checkReflection(t, m || {}), dimensionScores, matchCareers: () => matchCareers(), state: () => S };
 })();

@@ -62,6 +62,10 @@ It is a static site with no build step. In Vercel: **Add New → Project → Imp
 - The page loads fresh scripts on every visit for easy development (see `index.html`); remove that loader when hosting for production.
 - Hosting later: it is a static site, so GitHub Pages, Netlify, or Vercel work as-is. Accounts, syncing across devices, and parent/teacher dashboards would need a backend.
 
+## Automated checks
+
+`sh tests/run.sh` (macOS, no installs) checks every script's syntax, validates the Python exercises (every reference solution passes, no starter code does), and renders **every screen in every state** (all careers, demos, exercises, and difficulty settings) headlessly. `jsc tests/matching.js` simulates 2,000 students to check that career match scores are spread sensibly.
+
 ## Project structure
 
 ```
@@ -76,4 +80,5 @@ js/exercises.js      30 Python exercises with visible + hidden tests
 js/pyworker.js       runs student Python in a Web Worker (Pyodide)
 js/app.js            app logic and screens
 start.command        double-click launcher for macOS
+tests/               automated checks (see above)
 ```

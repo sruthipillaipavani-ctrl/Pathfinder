@@ -139,7 +139,7 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .ob { max-width: 600px; margin: 0 auto; padding-top: 8px; }
 .ob-top { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
 .ob-back { background: var(--soft); border: 0; width: 38px; height: 38px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; color: var(--ink); flex: none; }
-.ob-back[hidden] { visibility: hidden; display: block; }
+.ob-back[hidden] { display: none; }
 .ob .progress { margin: 0; flex: 1; }
 .bubble { position: relative; background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 12px 16px; font-weight: 600; }
 .bubble::before { content: ''; position: absolute; left: -8px; top: 22px; width: 13px; height: 13px; background: var(--surface); border-left: 1.5px solid var(--line); border-bottom: 1.5px solid var(--line); transform: rotate(45deg); }
@@ -387,7 +387,7 @@ textarea.code:focus { border-color: var(--accent); }
 .stdout pre { background: var(--soft); padding: 8px 12px; border-radius: 10px; margin: 4px 0 0; white-space: pre-wrap; }
 
 /* focus timer */
-.focus { text-align: center; }
+.card.focus { text-align: center; } /* only the timer card; body.focus is a layout mode, not a text style */
 .ring { --p: 0; width: 92px; height: 92px; flex: none; border-radius: 50%; display: grid; place-items: center; align-content: center; background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--soft) 0); position: relative; }
 .ring::before { content: ''; position: absolute; inset: 9px; border-radius: 50%; background: var(--surface); }
 .ring span, .ring small { position: relative; }
@@ -589,3 +589,37 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px soli
 details.join { font-size: .9rem; }
 details.join summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 2px 0; }
 details.join p { margin: 6px 0 0; color: var(--muted); }
+
+.explain-head { margin: 36px 0 4px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 1.25rem; }
+
+/* ---- polish pass ---- */
+/* Onboarding stays centered; lessons, quizzes and code screens read left-aligned. */
+.ob h1, .ob .ob-context, .ob .statement, .ob .eyebrow, .ob .daily-quote { text-align: center; }
+.exit[hidden] { display: none !important; }
+.checklist { max-width: 30em; }
+.lesson .checklist, .lesson .example { text-align: left; }
+.quiz > h2:first-of-type { text-align: center; }
+
+@media (max-width: 759px) {
+  /* The top bar is crowded on phones: the founders link stays in the footer and in focus screens. */
+  body:not(.focus) .about-link { display: none; }
+  /* Step cards: title and details get the full width; the action sits underneath. */
+  .step { padding: 14px 16px; }
+  .step .info { flex-basis: calc(100% - 52px); }
+  .step .go { flex-basis: 100%; }
+  .step .go .btn { display: flex; width: 100%; }
+  .step > .muted.small { flex-basis: 100%; padding-left: 48px; margin-top: -4px; }
+  .ob-foot .btn.big { flex: 1; }
+  .toast { font-size: .92rem; }
+}
+
+/* Six tabs must fit even on a small phone: share the width equally and scale the labels. */
+@media (max-width: 759px) {
+  #nav { gap: 0; padding-left: 2px; padding-right: 2px; }
+  #nav a { flex: 1 1 0; min-width: 0; padding: 8px 2px; font-size: clamp(.64rem, 2.9vw, .78rem); text-align: center; justify-content: center; white-space: nowrap; border-radius: 10px; }
+}
+
+/* Quiz feedback row: keep the Next button on one line; let long feedback wrap instead. */
+.quiz .feedback, .lesson .feedback { flex-wrap: wrap; }
+.quiz .feedback .btn, .lesson .feedback .btn { white-space: nowrap; flex: none; }
+.quiz .feedback p, .lesson .feedback p { flex: 1 1 12em; margin: 0; }
