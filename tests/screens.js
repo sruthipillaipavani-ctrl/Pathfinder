@@ -10,7 +10,7 @@ function iso(n) { var d = new Date(); d.setDate(d.getDate() + n); return d.getFu
 
 var S = window.PF_APP.state();
 // A. brand-new user
-['', 'welcome', 'start', 'founders', 'today', 'reveal', 'explore', 'career/pilot', 'rewards', 'portfolio', 'skillcheck', 'practice', 'code', 'profile'].forEach(function (r) { tryRoute('new user  #/' + r, '#/' + r); });
+['', 'welcome', 'start', 'founders', 'rocks', 'today', 'reveal', 'explore', 'career/pilot', 'rewards', 'portfolio', 'skillcheck', 'practice', 'code', 'profile'].forEach(function (r) { tryRoute('new user  #/' + r, '#/' + r); });
 // B. finished the quiz, no career yet
 S.profile = { name: 'Maya', grade: '9', subjects: ['Intro to Computer Science'], picks: ['coding', 'gaming'], hobbies: 'Video games', interests: 'gaming, coding', aspirations: 'build games', dailyMinutes: 45 };
 S.personality = { dimensions: { analytical: 80, creative: 40, people: 50, leader: 40, investigator: 70, builder: 50 }, date: iso(0) };

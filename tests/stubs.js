@@ -43,5 +43,5 @@ var URLSearchParams = function (q) { var m = {}; String(q || '').split('&').forE
 var HashChangeEvent = function () {}, Event = function () {};
 window.PF_V = 1;
 
-['js/data.js', 'js/careers_extra.js', 'js/activities_extra.js', 'js/adapt.js', 'js/practice.js', 'js/lessons.js', 'js/exercises.js', 'js/app.js'].forEach(function (f) { load(f); });
+['js/data.js', 'js/careers_extra.js', 'js/activities_extra.js', 'js/rocks.js', 'js/adapt.js', 'js/practice.js', 'js/lessons.js', 'js/exercises.js', 'js/app.js'].forEach(function (f) { load(f); });
 

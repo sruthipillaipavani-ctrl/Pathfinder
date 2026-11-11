@@ -404,7 +404,7 @@
     const focusMode = FOCUS.includes(name) || ((name === 'practice' || name === 'code') && !!arg);
     document.body.classList.toggle('focus', focusMode);
     document.body.dataset.route = name;
-    const SCREEN_TITLES = { start: 'Get started', reveal: 'Your results', explore: 'Explore careers', today: 'Today', schedule: 'My path', practice: 'Practice', code: 'Code Lab', lesson: 'Lesson', skillcheck: 'Set your starting level', rewards: 'Me', profile: 'About me', portfolio: 'My portfolio', founders: 'Meet the founders', tryout: 'Activity preview', focus: 'Focus session' };
+    const SCREEN_TITLES = { start: 'Get started', reveal: 'Your results', explore: 'Explore careers', today: 'Today', schedule: 'My path', practice: 'Practice', code: 'Code Lab', lesson: 'Lesson', skillcheck: 'Set your starting level', rewards: 'Me', profile: 'About me', portfolio: 'My portfolio', founders: 'Meet the founders', tryout: 'Activity preview', rocks: 'Rocks & minerals', focus: 'Focus session' };
     const pageTitle = name === 'career' ? (D.CAREERS.find((c) => c.id === arg) || {}).title : SCREEN_TITLES[name];
     document.title = pageTitle ? `${pageTitle} · Pathfinder` : 'Pathfinder';
     const app = $('#app');
@@ -1650,6 +1650,23 @@
     draw();
   }
 
+  routes.rocks = {
+    html: () => {
+      const P = window.PF_ROCKS;
+      return `
+      <section class="card narrow">
+        <a class="back" href="#/tryout/science-olympiad">← Science Olympiad</a>
+        <p class="eyebrow">Science Olympiad · Rocks &amp; Minerals</p>
+        <h1>Rock and mineral look-alikes</h1>
+        <p class="muted">Tiny drawings of ${P.LIST.length} specimens with one clue each. They show the typical color and texture, so use them to learn what to look for, then practice with real samples and your event's official list.</p>
+        ${Object.keys(P.KINDS).map((k) => `
+          <h2 class="rock-h">${P.KINDS[k].emoji} ${P.KINDS[k].label}</h2>
+          <div class="rock-grid">${P.LIST.filter((x) => x.kind === k).map((x) => `
+            <figure class="rock" title="${esc(x.clue)}">${x.svg}<figcaption><b>${esc(x.name)}</b><small>${esc(x.clue)}</small></figcaption></figure>`).join('')}</div>`).join('')}
+      </section>`;
+    },
+  };
+
   routes.tryout = {
     html: (id) => {
       const a = D.ACTIVITIES.find((x) => x.id === id);
@@ -1664,6 +1681,7 @@
             ${st.w ? `<textarea rows="3" placeholder="Write a few words…"></textarea><div class="row"><small class="muted">A few words is plenty.</small><button class="btn small" data-done>Done</button></div>`
                    : `<label class="toggle"><input type="checkbox" data-done> I did this</label>`}
             <div class="reveal" hidden></div></li>`).join('')}</ol>
+        ${a.id === 'science-olympiad' ? `<a class="card rock-link" href="#/rocks"><span class="act-emoji">🪨</span><div><b>Rocks &amp; Minerals picture guide</b><small class="muted">Tiny pictures and ID clues for every rock and mineral on the study list.</small></div></a>` : ''}
         <div id="challenge" hidden></div>
         <div id="rate" hidden>
           <h3>How was it?</h3>
