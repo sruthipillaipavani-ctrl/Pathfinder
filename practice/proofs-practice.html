@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proof Practice</title>
+<style>
+  @page { size: Letter; margin: 0.5in; }
+  :root { --ink:#111827; --muted:#6b7280; --line:#9ca3af; }
+  * { box-sizing: border-box; }
+  body { font: 11pt/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); margin: 0; background:#fff; }
+  main { max-width: 7.5in; margin: 0 auto; }
+  h1 { margin: 0; font-size: 20pt; }
+  .sub { color: var(--muted); margin: 2px 0 8px; font-size: 10pt; }
+  .box { border:1px solid #d1d5db; border-radius:6px; padding:8px 12px; background:#f9fafb; margin:8px 0; font-size: 9.5pt; }
+  .box b { font-weight: 700; }
+  .bank { columns: 2; column-gap: 24px; margin: 4px 0 0; padding-left: 16px; }
+  .bank li { margin: 0 0 2px; break-inside: avoid; }
+  .proof { break-inside: avoid; page-break-inside: avoid; margin: 14px 0 10px; }
+  .ph { display:flex; align-items: baseline; gap: 10px; border-bottom: 2px solid var(--ink); padding-bottom: 2px; margin-bottom: 6px; }
+  .ph h2 { margin: 0; font-size: 13pt; }
+  .stars { color: #b45309; font-size: 10pt; letter-spacing: 1px; }
+  .top { display:flex; gap: 16px; align-items: flex-start; }
+  .diag { width: 3.1in; flex: none; }
+  .diag svg { width: 100%; height: auto; display:block; border: 1px solid #d1d5db; border-radius: 4px; }
+  .txt { flex: 1; }
+  .txt p { margin: 0 0 6px; }
+  .lab { font-weight: 700; }
+  .tools { color: var(--muted); font-size: 9.5pt; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th { text-align: left; font-size: 10pt; background: #f3f4f6; border: 1px solid var(--line); padding: 3px 8px; }
+  td { border: 1px solid var(--line); padding: 3px 8px; height: 34px; vertical-align: top; font-size: 10.5pt; }
+  td.n { width: 22px; color: var(--muted); text-align:center; padding: 3px 2px; }
+  td.s { width: 50%; }
+  .key td { height: auto; }
+  .key td.r { color: #374151; }
+  .note { color: var(--muted); font-size: 9pt; margin-top: 4px; }
+  .pb { break-before: page; page-break-before: always; }
+  .m { font-family: "STIXGeneral", "STIX Two Math", "Cambria Math", "Apple Symbols", serif; font-size: 1.08em; }
+</style>
+</head>
+<body>
+<main id="root"></main>
+<script>
+var MODE = location.hash === "#key" ? "key" : "test";
+var INK = "#111", MK = "#1d4ed8";
+
+function sub(a, b) { return [b[0] - a[0], b[1] - a[1]]; }
+function unit(v) { var l = Math.hypot(v[0], v[1]); return [v[0] / l, v[1] / l]; }
+function f1(n) { return n.toFixed(1); }
+function ln(p, q, c, w) { return '<line x1="' + f1(p[0]) + '" y1="' + f1(p[1]) + '" x2="' + f1(q[0]) + '" y2="' + f1(q[1]) + '" stroke="' + c + '" stroke-width="' + w + '"/>'; }
+function mid(p, q) { return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]; }
+
+function ticks(p, q, n) {
+  var m = mid(p, q), u = unit(sub(p, q)), v = [-u[1], u[0]], s = "";
+  for (var k = 0; k < n; k++) {
+    var o = (k - (n - 1) / 2) * 6, c = [m[0] + u[0] * o, m[1] + u[1] * o];
+    s += ln([c[0] - v[0] * 5, c[1] - v[1] * 5], [c[0] + v[0] * 5, c[1] + v[1] * 5], MK, 2);
+  }
+  return s;
+}
+function arrows(p, q, n) {
+  var m = mid(p, q), u = unit(sub(p, q)), v = [-u[1], u[0]], s = "";
+  for (var k = 0; k < n; k++) {
+    var o = (k - (n - 1) / 2) * 8, c = [m[0] + u[0] * o, m[1] + u[1] * o];
+    var tip = [c[0] + u[0] * 4, c[1] + u[1] * 4], tail = [c[0] - u[0] * 4, c[1] - u[1] * 4];
+    s += ln(tip, [tail[0] + v[0] * 5, tail[1] + v[1] * 5], MK, 2) + ln(tip, [tail[0] - v[0] * 5, tail[1] - v[1] * 5], MK, 2);
+  }
+  return s;
+}
+function right(V, P, Q) {
+  var u = unit(sub(V, P)), w = unit(sub(V, Q)), d = 11;
+  var a = [V[0] + u[0] * d, V[1] + u[1] * d], b = [a[0] + w[0] * d, a[1] + w[1] * d], c = [V[0] + w[0] * d, V[1] + w[1] * d];
+  return '<polyline points="' + f1(a[0]) + "," + f1(a[1]) + " " + f1(b[0]) + "," + f1(b[1]) + " " + f1(c[0]) + "," + f1(c[1]) + '" fill="none" stroke="' + MK + '" stroke-width="1.8"/>';
+}
+function angArc(V, P, Q, n, base) {
+  var u = unit(sub(V, P)), w = unit(sub(V, Q)), s = "";
+  var cross = u[0] * w[1] - u[1] * w[0], sweep = cross > 0 ? 1 : 0;
+  for (var k = 0; k < n; k++) {
+    var r = (base || 26) + 5 * k;
+    s += '<path d="M' + f1(V[0] + u[0] * r) + " " + f1(V[1] + u[1] * r) + " A" + r + " " + r + " 0 0 " + sweep + " " + f1(V[0] + w[0] * r) + " " + f1(V[1] + w[1] * r) + '" fill="none" stroke="' + MK + '" stroke-width="1.8"/>';
+  }
+  return s;
+}
+
+function fig(f) {
+  var P = f.pts, s = '<svg viewBox="0 0 300 230" xmlns="http://www.w3.org/2000/svg">';
+  s += '<polygon points="' + f.poly.map(function (k) { return P[k].join(","); }).join(" ") + '" fill="none" stroke="' + INK + '" stroke-width="2"/>';
+  (f.extra || []).forEach(function (e) { s += ln(P[e[0]], P[e[1]], INK, 1.6); });
+  (f.ticks || []).forEach(function (t) { s += ticks(P[t[0]], P[t[1]], t[2]); });
+  (f.par || []).forEach(function (t) { s += arrows(P[t[0]], P[t[1]], t[2]); });
+  (f.rights || []).forEach(function (t) { s += right(P[t[0]], P[t[1]], P[t[2]]); });
+  (f.arcs || []).forEach(function (t) { s += angArc(P[t[0]], P[t[1]], P[t[2]], t[3], t[4]); });
+  var cx = 0, cy = 0;
+  f.poly.forEach(function (k) { cx += P[k][0]; cy += P[k][1]; });
+  cx /= f.poly.length; cy /= f.poly.length;
+  Object.keys(P).forEach(function (k) {
+    var p = P[k], off;
+    if (f.inner && f.inner[k]) off = f.inner[k];
+    else { var u = unit(sub([cx, cy], p)); off = [u[0] * 15, u[1] * 15 + 4]; }
+    s += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="2.8" fill="' + INK + '"/>';
+    s += '<text x="' + f1(p[0] + off[0]) + '" y="' + f1(p[1] + off[1]) + '" font-size="15" font-weight="700" text-anchor="middle" fill="' + INK + '">' + k + "</text>";
+  });
+  return s + "</svg>";
+}
+
+var PG = { A: [40, 170], B: [100, 60], C: [260, 60], D: [200, 170] };
+function withE(base, e) { var o = {}; for (var k in base) o[k] = base[k]; o.E = e; return o; }
+
+var figs = {
+  f1: { pts: PG, poly: ["A", "B", "C", "D"], extra: [["A", "C"]], par: [["A", "B", 1], ["D", "C", 1], ["B", "C", 2], ["A", "D", 2]] },
+  f2: { pts: withE(PG, [150, 115]), poly: ["A", "B", "C", "D"], extra: [["A", "C"], ["B", "D"]], par: [["A", "B", 1], ["D", "C", 1], ["B", "C", 2], ["A", "D", 2]], inner: { E: [4, 20] } },
+  f3: { pts: { A: [40, 180], B: [40, 60], C: [240, 60], D: [240, 180] }, poly: ["A", "B", "C", "D"], extra: [["A", "C"], ["B", "D"]],
+        rights: [["A", "B", "D"], ["B", "A", "C"], ["C", "B", "D"], ["D", "C", "A"]] },
+  f4: { pts: { A: [150, 28], B: [70, 120], C: [150, 205], D: [230, 120], E: [150, 120] }, poly: ["A", "B", "C", "D"], extra: [["A", "C"], ["B", "D"]],
+        ticks: [["A", "B", 1], ["A", "D", 1], ["C", "B", 2], ["C", "D", 2]], inner: { E: [-12, 20] } },
+  f5: { pts: withE(PG, [150, 115]), poly: ["A", "B", "C", "D"], extra: [["A", "C"], ["B", "D"]], par: [["A", "B", 1], ["D", "C", 1], ["B", "C", 2], ["A", "D", 2]],
+        rights: [["E", "A", "B"]], inner: { E: [4, 22] } },
+  f6: { pts: { A: [40, 160], B: [90, 50], C: [250, 70], D: [200, 180], E: [145, 115] }, poly: ["A", "B", "C", "D"], extra: [["A", "C"], ["B", "D"]],
+        ticks: [["A", "E", 1], ["E", "C", 1], ["B", "E", 2], ["E", "D", 2]], inner: { E: [4, 22] } },
+  f7: { pts: PG, poly: ["A", "B", "C", "D"], extra: [["A", "C"]], par: [["A", "B", 1], ["D", "C", 1], ["B", "C", 2], ["A", "D", 2]], arcs: [["A", "B", "C", 1, 26], ["A", "C", "D", 1, 42]] },
+  f8: { pts: { A: [80, 190], B: [80, 50], C: [220, 50], D: [220, 190], E: [150, 120] }, poly: ["A", "B", "C", "D"], extra: [["A", "C"], ["B", "D"]],
+        ticks: [["A", "B", 1], ["B", "C", 1], ["C", "D", 1], ["D", "A", 1]],
+        rights: [["A", "B", "D"], ["B", "A", "C"], ["C", "B", "D"], ["D", "C", "A"]], inner: { E: [14, 4] } }
+};
+
+var proofs = [
+  { title: "Diagonal splits a parallelogram", stars: 1, fig: "f1",
+    given: "ABCD is a parallelogram with diagonal AC.", prove: "△ABC ≅ △CDA",
+    tools: "Parallelogram opposite sides thm · reflexive property · SSS",
+    steps: [
+      ["ABCD is a parallelogram", "Given"],
+      ["AB ≅ CD and BC ≅ DA", "Parallelogram opposite sides thm"],
+      ["AC ≅ CA", "Reflexive property (shared side)"],
+      ["△ABC ≅ △CDA", "SSS"]
+    ] },
+  { title: "Diagonals of a parallelogram bisect each other", stars: 2, fig: "f2",
+    given: "ABCD is a parallelogram. Diagonals AC and BD intersect at E.", prove: "AE ≅ CE and BE ≅ DE",
+    tools: "Alternate interior ∠'s thm · parallelogram opposite sides thm · ASA · CPCTC",
+    steps: [
+      ["ABCD is a parallelogram", "Given"],
+      ["AB ∥ DC", "Definition of parallelogram"],
+      ["∠BAE ≅ ∠DCE and ∠ABE ≅ ∠CDE", "Alternate interior ∠'s thm (AC and BD are transversals)"],
+      ["AB ≅ CD", "Parallelogram opposite sides thm"],
+      ["△ABE ≅ △CDE", "ASA"],
+      ["AE ≅ CE and BE ≅ DE", "CPCTC (corresponding parts of congruent triangles are congruent)"]
+    ] },
+  { title: "Diagonals of a rectangle are congruent", stars: 2, fig: "f3",
+    given: "ABCD is a rectangle (four right angles; opposite sides ≅ and ∥) with diagonals AC and BD.", prove: "AC ≅ BD",
+    tools: "Right angles congruence thm · parallelogram opposite sides thm · SAS · CPCTC",
+    steps: [
+      ["ABCD is a rectangle", "Given"],
+      ["AB ≅ DC", "Opposite sides of a rectangle are ≅ (a rectangle is a parallelogram)"],
+      ["∠ABC and ∠DCB are right angles", "Definition of rectangle"],
+      ["∠ABC ≅ ∠DCB", "Right angles congruence thm"],
+      ["BC ≅ CB", "Reflexive property"],
+      ["△ABC ≅ △DCB", "SAS"],
+      ["AC ≅ DB", "CPCTC"]
+    ] },
+  { title: "A kite's diagonal is a perpendicular bisector (uses a converse)", stars: 2, fig: "f4",
+    given: "ABCD is a kite with AB ≅ AD and CB ≅ CD. The diagonals meet at E.", prove: "Line AC is the perpendicular bisector of BD.",
+    tools: "Converse of the perpendicular bisector thm · two points determine a line",
+    steps: [
+      ["AB ≅ AD", "Given"],
+      ["A lies on the perpendicular bisector of BD", "Converse of perpendicular bisector thm (A is equally far from B and D)"],
+      ["CB ≅ CD", "Given"],
+      ["C lies on the perpendicular bisector of BD", "Converse of perpendicular bisector thm (C is equally far from B and D)"],
+      ["Line AC is the perpendicular bisector of BD", "Two points determine a line, and A and C are both on the perpendicular bisector"]
+    ] },
+  { title: "Parallelogram with perpendicular diagonals is a rhombus", stars: 3, fig: "f5",
+    given: "ABCD is a parallelogram. Diagonals AC and BD intersect at E and AC ⊥ BD.", prove: "ABCD is a rhombus.",
+    tools: "Parallelogram diagonals thm · perpendicular bisector thm · parallelogram opposite sides thm · definition of rhombus",
+    steps: [
+      ["ABCD is a parallelogram", "Given"],
+      ["AE ≅ CE (E is the midpoint of AC)", "Parallelogram diagonals thm (diagonals bisect each other)"],
+      ["AC ⊥ BD", "Given"],
+      ["BD is the perpendicular bisector of AC", "Steps 2 and 3: BD passes through the midpoint of AC at 90°"],
+      ["BA ≅ BC", "Perpendicular bisector thm (B is on the perpendicular bisector of AC)"],
+      ["AB ≅ CD and BC ≅ DA", "Parallelogram opposite sides thm"],
+      ["AB ≅ BC ≅ CD ≅ DA", "Substitution (steps 5 and 6)"],
+      ["ABCD is a rhombus", "Definition of rhombus (4 ≅ sides)"]
+    ] },
+  { title: "Diagonals that bisect each other make a parallelogram (uses a converse)", stars: 3, fig: "f6",
+    given: "In quadrilateral ABCD, diagonals AC and BD intersect at E with AE ≅ CE and BE ≅ DE.", prove: "ABCD is a parallelogram.",
+    tools: "Vertical angles congruence thm · SAS · CPCTC · converse of the parallelogram opposite sides thm",
+    steps: [
+      ["AE ≅ CE and BE ≅ DE", "Given"],
+      ["∠AEB ≅ ∠CED and ∠AED ≅ ∠CEB", "Vertical angles congruence thm"],
+      ["△AEB ≅ △CED", "SAS (AE ≅ CE, ∠AEB ≅ ∠CED, BE ≅ DE)"],
+      ["AB ≅ CD", "CPCTC"],
+      ["△AED ≅ △CEB", "SAS (AE ≅ CE, ∠AED ≅ ∠CEB, DE ≅ BE)"],
+      ["AD ≅ CB", "CPCTC"],
+      ["ABCD is a parallelogram", "Converse of parallelogram opposite sides thm (both pairs of opposite sides ≅)"]
+    ] },
+  { title: "Diagonal bisects an angle of a parallelogram: rhombus (uses a converse)", stars: 3, fig: "f7",
+    given: "ABCD is a parallelogram. Diagonal AC bisects ∠DAB, so ∠BAC ≅ ∠CAD.", prove: "ABCD is a rhombus.",
+    tools: "Alternate interior ∠'s thm · converse of the base ∠'s thm · parallelogram opposite sides thm",
+    steps: [
+      ["ABCD is a parallelogram", "Given"],
+      ["AB ∥ DC", "Definition of parallelogram"],
+      ["∠BAC ≅ ∠DCA", "Alternate interior ∠'s thm (transversal AC)"],
+      ["∠BAC ≅ ∠CAD", "Given (AC bisects ∠DAB)"],
+      ["∠CAD ≅ ∠DCA", "Transitive property (steps 3 and 4)"],
+      ["DA ≅ DC", "Converse of base ∠'s thm (in △ADC, the sides opposite the congruent angles are ≅)"],
+      ["AB ≅ CD and BC ≅ DA", "Parallelogram opposite sides thm"],
+      ["AB ≅ BC ≅ CD ≅ DA", "Substitution (steps 6 and 7)"],
+      ["ABCD is a rhombus", "Definition of rhombus (4 ≅ sides)"]
+    ] },
+  { title: "Challenge: diagonals of a square are congruent and perpendicular", stars: 3, fig: "f8",
+    given: "ABCD is a square with diagonals AC and BD intersecting at E.", prove: "AC ≅ BD and AC ⊥ BD",
+    tools: "Right angles congruence thm · SAS · CPCTC · converse of the perpendicular bisector thm",
+    steps: [
+      ["ABCD is a square", "Given"],
+      ["AB ≅ BC ≅ CD ≅ DA, and all four angles are right angles", "Definition of square"],
+      ["∠ABC ≅ ∠DCB", "Right angles congruence thm"],
+      ["△ABC ≅ △DCB", "SAS (AB ≅ DC, ∠ABC ≅ ∠DCB, BC ≅ CB)"],
+      ["AC ≅ DB", "CPCTC"],
+      ["AB ≅ AD and CB ≅ CD", "Step 2"],
+      ["A and C both lie on the perpendicular bisector of BD", "Converse of perpendicular bisector thm"],
+      ["Line AC is the perpendicular bisector of BD, so AC ⊥ BD", "Two points determine a line"]
+    ] }
+];
+
+var bank = [
+  "<b>Right angles congruence:</b> all right angles are ≅",
+  "<b>Vertical angles congruence:</b> vertical angles are ≅",
+  "<b>Corresponding ∠'s:</b> ∥ lines, so corresponding ∠'s ≅ (converse: ∠'s ≅, so lines ∥)",
+  "<b>Alternate interior ∠'s:</b> ∥ lines, so alternate interior ∠'s ≅",
+  "<b>Triangle sum:</b> interior ∠'s of a triangle add to 180°",
+  "<b>Base ∠'s:</b> 2 sides of a △ ≅, so the angles opposite are ≅ (converse: 2 ∠'s ≅, so the sides opposite are ≅)",
+  "<b>Triangle congruence:</b> SSS, SAS, ASA, AAS, HL",
+  "<b>CPCTC:</b> corresponding parts of ≅ triangles are ≅",
+  "<b>Perpendicular bisector thm:</b> a point on the perpendicular bisector of a segment is equally far from both endpoints (converse: equally far from both endpoints, so it lies on the perpendicular bisector)",
+  "<b>Parallelogram opposite sides / opposite ∠'s:</b> both are ≅ (converses: if both pairs are ≅, it is a parallelogram)",
+  "<b>Parallelogram consecutive ∠'s:</b> supplementary",
+  "<b>Parallelogram diagonals:</b> bisect each other (perpendicular only in a rhombus or square)",
+  "<b>Rhombus:</b> 4 ≅ sides. <b>Rectangle:</b> 4 right ∠'s. <b>Square:</b> 4 ≅ sides and 4 right ∠'s. <b>Kite:</b> 2 pairs of adjacent ≅ sides"
+];
+
+function render() {
+  var h = "<h1>" + (MODE === "key" ? "Proof Practice: Answer Key" : "Proof Practice") + "</h1>";
+  h += "<p class='sub'>Parallelograms, rhombi, rectangles, squares, kites and converses &nbsp;|&nbsp; diagrams are not drawn to scale</p>";
+  if (MODE === "test") {
+    h += "<div class='box'><b>How to attack a proof:</b> (1) Copy the marks from the diagram into Given. (2) Look at what you must Prove and work backward: which theorem or triangle congruence would give that? (3) Fill the table one step at a time, with a reason for every statement. Blue tick marks mean ≅ sides, arrows mean ∥ sides, small squares mean right angles, arcs mean ≅ angles. Stars show difficulty; the harder ones use <b>converses</b>.</div>";
+    h += "<div class='box'><b>Theorem bank (from your notes):</b><ul class='bank'>" + bank.map(function (b) { return "<li>" + b + "</li>"; }).join("") + "</ul></div>";
+  } else {
+    h += "<div class='box'>These are model proofs. Yours can differ in order or use a different valid theorem, as long as every step has a correct reason.</div>";
+  }
+  proofs.forEach(function (p, i) {
+    var cls = "proof" + (MODE === "test" && i >= 1 ? " pb" : "");
+    h += "<div class='" + cls + (MODE === "key" ? " key" : "") + "'>";
+    h += "<div class='ph'><h2>" + (i + 1) + ". " + p.title + "</h2><span class='stars'>" + "★".repeat(p.stars) + "☆".repeat(3 - p.stars) + "</span></div>";
+    h += "<div class='top'><div class='diag'>" + fig(figs[p.fig]) + "</div><div class='txt'>";
+    h += "<p><span class='lab'>Given:</span> " + p.given + "</p><p><span class='lab'>Prove:</span> " + p.prove + "</p>";
+    if (MODE === "test") h += "<p class='tools'><span class='lab'>Tools:</span> " + p.tools + "</p>";
+    h += "</div></div>";
+    h += "<table><tr><th></th><th>Statements</th><th>Reasons</th></tr>";
+    var rows = MODE === "key" ? p.steps.length : p.steps.length + 1;
+    for (var r = 0; r < rows; r++) {
+      var st = MODE === "key" ? p.steps[r] : ["", ""];
+      h += "<tr><td class='n'>" + (r + 1) + "</td><td class='s'>" + st[0] + "</td><td class='r'>" + st[1] + "</td></tr>";
+    }
+    h += "</table></div>";
+  });
+  h = h.replace(/[≅∠△∥⊥]/g, function (c) { return '<span class="m">' + c + "</span>"; });
+  document.getElementById("root").innerHTML = h;
+}
+render();
+</script>
+</body>
+</html>
